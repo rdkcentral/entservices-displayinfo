@@ -258,6 +258,7 @@ namespace WPEFramework {
                 std::string getStbTimestampString();
 		std::string getStbBranchString();
                 bool makePersistentDir();
+                std::string RetrieveModelNumberThroughCOMRPC();
 
 #if defined(USE_IARMBUS) || defined(USE_IARM_BUS)
                 void InitializeIARM();
