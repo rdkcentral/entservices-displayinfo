@@ -63,7 +63,7 @@ public:
         bcm_host_deinit();
     }
 
-    uint32_t Configure(PluginHost::IShell* framework) override
+    Core::hresult Configure(PluginHost::IShell* framework) override
     {
         Config config;
         config.FromString(framework->ConfigLine());
@@ -74,12 +74,12 @@ public:
 
 public:
     // Graphics Properties interface
-    uint32_t TotalGpuRam(uint64_t& total) const override
+    Core::hresult TotalGpuRam(uint64_t& total) const override
     {
         total = _totalGpuRam;
         return (Core::ERROR_NONE);
     }
-    uint32_t FreeGpuRam(uint64_t& free) const override
+    Core::hresult FreeGpuRam(uint64_t& free) const override
     {
         uint64_t result;
         Command("get_mem reloc ", result);
@@ -88,7 +88,7 @@ public:
     }
 
     // Connection Properties interface
-    uint32_t Register(INotification* notification) override
+    Core::hresult Register(INotification* notification) override
     {
         _adminLock.Lock();
 
@@ -102,7 +102,7 @@ public:
 
         return (Core::ERROR_NONE);
     }
-    uint32_t Unregister(INotification* notification) override
+    Core::hresult Unregister(INotification* notification) override
     {
         _adminLock.Lock();
 
@@ -120,69 +120,69 @@ public:
 
         return (Core::ERROR_NONE);
     }
-    uint32_t IsAudioPassthrough (bool& passthru) const override
+    Core::hresult IsAudioPassthrough (bool& passthru) const override
     {
         passthru = _audioPassthrough;
         return (Core::ERROR_NONE);
     }
-    uint32_t Connected(bool& isconnected) const override
+    Core::hresult Connected(bool& isconnected) const override
     {
         isconnected = _connected;
         return (Core::ERROR_NONE);
     }
-    uint32_t Width(uint32_t& width) const override
+    Core::hresult Width(uint32_t& width) const override
     {
         width = _width;
         return (Core::ERROR_NONE);
     }
-    uint32_t Height(uint32_t& height) const override
+    Core::hresult Height(uint32_t& height) const override
     {
         height = _height;
         return (Core::ERROR_NONE);
     }
-    uint32_t VerticalFreq(uint32_t& vf) const override
+    Core::hresult VerticalFreq(uint32_t& vf) const override
     {
         vf = ~0;
         return (Core::ERROR_NONE);
     }
-    uint32_t HDCPProtection(HDCPProtectionType& value) const override
+    Core::hresult HDCPProtection(HDCPProtectionType& value) const override
     {
         value = _value;
         return (Core::ERROR_NONE);
     }
-    uint32_t HDCPProtection(const HDCPProtectionType value) override
+    Core::hresult HDCPProtection(const HDCPProtectionType value) override
     {
         _value = value;
         return (Core::ERROR_NONE);
     }
-    uint32_t EDID (uint16_t& length, uint8_t data[]) const override
+    Core::hresult EDID (uint16_t& length, uint8_t data[]) const override
     {
         length = _EDID.Raw(length, data);
         return (Core::ERROR_NONE);
     }
-    uint32_t WidthInCentimeters(uint8_t& width) const override
+    Core::hresult WidthInCentimeters(uint8_t& width) const override
     {
         width = _EDID.WidthInCentimeters();
         return width ? (Core::ERROR_NONE) : Core::ERROR_UNAVAILABLE;
     }
-    uint32_t HeightInCentimeters(uint8_t& height) const override
+    Core::hresult HeightInCentimeters(uint8_t& height) const override
     {
         height = _EDID.HeightInCentimeters();
         return height ? (Core::ERROR_NONE) : Core::ERROR_UNAVAILABLE;
     }
-    uint32_t PortName(string&) const override
+    Core::hresult PortName(string&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
-    uint32_t TVCapabilities(IHDRIterator*&) const override
+    Core::hresult TVCapabilities(IHDRIterator*&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
-    uint32_t STBCapabilities(IHDRIterator*&) const override
+    Core::hresult STBCapabilities(IHDRIterator*&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
-    uint32_t HDRSetting(HDRType& type) const override
+    Core::hresult HDRSetting(HDRType& type) const override
     {
         type = HDR_OFF;
         return (Core::ERROR_NONE);
@@ -231,32 +231,32 @@ public:
         _adminLock.Unlock();
     }
 
-    uint32_t ColorSpace(ColourSpaceType&) const override
+    Core::hresult ColorSpace(ColourSpaceType&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
 
-    uint32_t FrameRate(FrameRateType&) const override
+    Core::hresult FrameRate(FrameRateType&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
 
-    uint32_t ColourDepth(ColourDepthType&) const override
+    Core::hresult ColourDepth(ColourDepthType&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
 
-    uint32_t Colorimetry(IColorimetryIterator*&) const override
+    Core::hresult Colorimetry(IColorimetryIterator*&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
 
-    uint32_t QuantizationRange(QuantizationRangeType&) const override
+    Core::hresult QuantizationRange(QuantizationRangeType&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }
 
-    virtual uint32_t EOTF(EotfType&) const override
+    virtual Core::hresult EOTF(EotfType&) const override
     {
         return (Core::ERROR_UNAVAILABLE);
     }

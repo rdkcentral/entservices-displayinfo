@@ -99,19 +99,19 @@ public:
 
 public:
     // Graphics Properties interface
-    uint32_t TotalGpuRam(uint64_t& total) const override
+    Core::hresult TotalGpuRam(uint64_t& total) const override
     {
         total = SoC_GetTotalGpuRam(); // TODO: Implement using DeviceSettings
         return (Core::ERROR_NONE);
     }
-    uint32_t FreeGpuRam(uint64_t& free ) const override
+    Core::hresult FreeGpuRam(uint64_t& free ) const override
     {
         free = SoC_GetFreeGpuRam(); // TODO: Implement using DeviceSettings
         return (Core::ERROR_NONE);
     }
 
     // Connection Properties interface
-    uint32_t Register(INotification* notification) override
+    Core::hresult Register(INotification* notification) override
     {
         _adminLock.Lock();
 
@@ -125,7 +125,7 @@ public:
 
         return (Core::ERROR_NONE);
     }
-    uint32_t Unregister(INotification* notification) override
+    Core::hresult Unregister(INotification* notification) override
     {
         _adminLock.Lock();
 
@@ -175,7 +175,7 @@ public:
         _adminLock.Unlock();
     }
 
-    uint32_t IsAudioPassthrough (bool& value) const override
+    Core::hresult IsAudioPassthrough (bool& value) const override
     {
         uint32_t ret =  (Core::ERROR_NONE);
         value = false;
@@ -194,7 +194,7 @@ public:
         }
         return ret;
     }
-    uint32_t Connected(bool& connected) const override
+    Core::hresult Connected(bool& connected) const override
     {
         try
         {
@@ -209,17 +209,17 @@ public:
         }
         return (Core::ERROR_NONE);
     }
-    uint32_t Width(uint32_t& value) const override
+    Core::hresult Width(uint32_t& value) const override
     {
         value = SoC_GetGraphicsWidth();
         return (Core::ERROR_NONE);
     }
-    uint32_t Height(uint32_t& value) const override
+    Core::hresult Height(uint32_t& value) const override
     {
         value = SoC_GetGraphicsHeight();
         return (Core::ERROR_NONE);
     }
-    uint32_t VerticalFreq(uint32_t& value) const override
+    Core::hresult VerticalFreq(uint32_t& value) const override
     {
         std::vector<uint8_t> edidVec;
         uint32_t ret = GetEdidBytes(edidVec);
@@ -250,7 +250,7 @@ public:
         return ret;
    }
 
-    uint32_t HDCPProtection(HDCPProtectionType& value) const override //get
+    Core::hresult HDCPProtection(HDCPProtectionType& value) const override //get
     {
         int hdcpversion = 1;
         string portname;
@@ -280,7 +280,7 @@ public:
         return (Core::ERROR_NONE);
     }
 
-    uint32_t HDCPProtection(const HDCPProtectionType value) override //set
+    Core::hresult HDCPProtection(const HDCPProtectionType value) override //set
     {
         dsHdcpProtocolVersion_t hdcpversion = dsHDCP_VERSION_MAX;
         string portname;
@@ -314,7 +314,7 @@ public:
         return (Core::ERROR_NONE);
     }
 
-    uint32_t WidthInCentimeters(uint8_t& width /* @out */) const override
+    Core::hresult WidthInCentimeters(uint8_t& width /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
         std::vector<uint8_t> edidVec;
@@ -336,7 +336,7 @@ public:
         return ret;
     }
 
-    uint32_t HeightInCentimeters(uint8_t& height /* @out */) const override
+    Core::hresult HeightInCentimeters(uint8_t& height /* @out */) const override
     {
         try
         {
@@ -366,7 +366,7 @@ public:
         return (Core::ERROR_NONE);
     }
 
-    uint32_t EDID (uint16_t& length /* @inout */, uint8_t data[] /* @out @length:length */) const override
+    Core::hresult EDID (uint16_t& length /* @inout */, uint8_t data[] /* @out @length:length */) const override
     {
         std::vector<uint8_t> edidVec({'u','n','k','n','o','w','n' });
         int ret = Core::ERROR_NONE;
@@ -405,7 +405,7 @@ public:
 
     }
 
-    uint32_t PortName (string& name /* @out */) const
+    Core::hresult PortName (string& name /* @out */) const
     {
         try
         {
@@ -429,7 +429,7 @@ public:
         return (Core::ERROR_NONE);
     }
 
-    uint32_t ColorSpace(ColourSpaceType& cs /* @out */) const override
+    Core::hresult ColorSpace(ColourSpaceType& cs /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
         try
@@ -471,7 +471,7 @@ public:
         return ret;
     }
 
-    uint32_t FrameRate(FrameRateType& rate /* @out */) const override
+    Core::hresult FrameRate(FrameRateType& rate /* @out */) const override
     {
         rate = FRAMERATE_UNKNOWN;
         uint32_t ret =  (Core::ERROR_NONE);
@@ -510,7 +510,7 @@ public:
         return ret;
     }
 
-    uint32_t ColourDepth(ColourDepthType& colour /* @out */) const override
+    Core::hresult ColourDepth(ColourDepthType& colour /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
         try
@@ -548,7 +548,7 @@ public:
         return ret;
     }
 
-    uint32_t QuantizationRange(QuantizationRangeType& qr /* @out */) const override
+    Core::hresult QuantizationRange(QuantizationRangeType& qr /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
         try
@@ -584,7 +584,7 @@ public:
         return ret;
     }
 
-    uint32_t Colorimetry(IColorimetryIterator*& colorimetry /* @out */) const override
+    Core::hresult Colorimetry(IColorimetryIterator*& colorimetry /* @out */) const override
     {
         std::list<Exchange::IDisplayProperties::ColorimetryType> colorimetryCaps;
         std::vector<uint8_t> edidVec;
@@ -626,7 +626,7 @@ public:
         return (colorimetry != nullptr && ret == Core::ERROR_NONE ? Core::ERROR_NONE : Core::ERROR_GENERAL);
     }
 
-    uint32_t EOTF(EotfType& eotf /* @out */) const override
+    Core::hresult EOTF(EotfType& eotf /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
         try
@@ -665,7 +665,7 @@ public:
     // @property
     // @brief HDR formats supported by TV
     // @return HDRType: array of HDR formats
-    uint32_t TVCapabilities(IHDRIterator*& type /* out */) const override
+    Core::hresult TVCapabilities(IHDRIterator*& type /* out */) const override
     {
         std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
 
@@ -709,7 +709,7 @@ public:
     // @property
     // @brief HDR formats supported by STB
     // @return HDRType: array of HDR formats
-    uint32_t STBCapabilities(IHDRIterator*& type /* out */) const override
+    Core::hresult STBCapabilities(IHDRIterator*& type /* out */) const override
     {
         std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
 
@@ -746,7 +746,7 @@ public:
     // @property
     // @brief HDR format in use
     // @param type: HDR format
-    uint32_t HDRSetting(HDRType& type /* @out */) const override
+    Core::hresult HDRSetting(HDRType& type /* @out */) const override
     {
         type = IHDRProperties::HDRType::HDR_OFF;
         bool isHdr = false;

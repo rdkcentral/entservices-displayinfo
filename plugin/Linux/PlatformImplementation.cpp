@@ -177,13 +177,13 @@ namespace Plugin {
         GraphicsProperties(const GraphicsProperties&) = delete;
         const GraphicsProperties& operator=(const GraphicsProperties&) = delete;
 
-        uint32_t TotalGpuRam(uint64_t& total) const override
+        Core::hresult TotalGpuRam(uint64_t& total) const override
         {
             total = GetMemory(_memoryTotalKey) * _unitMultiplier;
             return Core::ERROR_NONE;
         }
 
-        uint32_t FreeGpuRam(uint64_t& free) const override
+        Core::hresult FreeGpuRam(uint64_t& free) const override
         {
             free = GetMemory(_memoryFreeKey) * _unitMultiplier;
             return Core::ERROR_NONE;
@@ -243,17 +243,17 @@ namespace Plugin {
         HDRProperties(const HDRProperties&) = delete;
         const HDRProperties& operator=(const HDRProperties&) = delete;
 
-        uint32_t TVCapabilities(VARIABLE_IS_NOT_USED IHDRIterator*& type) const override
+        Core::hresult TVCapabilities(VARIABLE_IS_NOT_USED IHDRIterator*& type) const override
         {
             return Core::ERROR_UNAVAILABLE;
         }
 
-        uint32_t STBCapabilities(VARIABLE_IS_NOT_USED IHDRIterator*& type) const override
+        Core::hresult STBCapabilities(VARIABLE_IS_NOT_USED IHDRIterator*& type) const override
         {
             return Core::ERROR_UNAVAILABLE;
         }
 
-        uint32_t HDRSetting(HDRType& type) const override
+        Core::hresult HDRSetting(HDRType& type) const override
         {
             type = GetHDRLevel();
             return Core::ERROR_NONE;
@@ -463,7 +463,7 @@ namespace Plugin {
             _udevObserver.Register(_callback, "hdcp");
         }
 
-        uint32_t Configure(PluginHost::IShell* framework) override
+        Core::hresult Configure(PluginHost::IShell* framework) override
         {
             _config.FromString(framework->ConfigLine());
             
@@ -484,7 +484,7 @@ namespace Plugin {
             return Core::ERROR_NONE;
         }
 
-        uint32_t Register(IConnectionProperties::INotification* notification) override
+        Core::hresult Register(IConnectionProperties::INotification* notification) override
         {
             std::lock_guard<std::mutex> lock(_observersLock);
 
@@ -499,7 +499,7 @@ namespace Plugin {
             return (Core::ERROR_NONE);
         }
 
-        uint32_t Unregister(IConnectionProperties::INotification* notification) override
+        Core::hresult Unregister(IConnectionProperties::INotification* notification) override
         {
             std::lock_guard<std::mutex> lock(_observersLock);
 
@@ -515,12 +515,12 @@ namespace Plugin {
             return (Core::ERROR_NONE);
         }
 
-        uint32_t IsAudioPassthrough(VARIABLE_IS_NOT_USED bool& passthru) const override
+        Core::hresult IsAudioPassthrough(VARIABLE_IS_NOT_USED bool& passthru) const override
         {
             return Core::ERROR_UNAVAILABLE;
         }
 
-        uint32_t Connected(bool& isconnected) const override
+        Core::hresult Connected(bool& isconnected) const override
         {
             uint32_t result = Core::ERROR_NONE;
 
@@ -532,7 +532,7 @@ namespace Plugin {
             return result;
         }
 
-        uint32_t Width(uint32_t& width) const override
+        Core::hresult Width(uint32_t& width) const override
         {
             uint32_t result = Core::ERROR_NONE;
 
@@ -544,7 +544,7 @@ namespace Plugin {
             return result;
         }
 
-        uint32_t Height(uint32_t& height) const override
+        Core::hresult Height(uint32_t& height) const override
         {
             uint32_t result = Core::ERROR_NONE;
 
@@ -556,7 +556,7 @@ namespace Plugin {
             return result;
         }
 
-        uint32_t VerticalFreq(uint32_t& vf) const override
+        Core::hresult VerticalFreq(uint32_t& vf) const override
         {
             uint32_t result = Core::ERROR_NONE;
 
@@ -568,7 +568,7 @@ namespace Plugin {
             return result;
         }
 
-        uint32_t EDID(uint16_t& length, uint8_t data[]) const override
+        Core::hresult EDID(uint16_t& length, uint8_t data[]) const override
         {
             uint32_t result = Core::ERROR_NONE;
 
@@ -582,17 +582,17 @@ namespace Plugin {
             return result;
         }
 
-        uint32_t WidthInCentimeters(VARIABLE_IS_NOT_USED uint8_t& width /* @out */) const override
+        Core::hresult WidthInCentimeters(VARIABLE_IS_NOT_USED uint8_t& width /* @out */) const override
         {
             return Core::ERROR_UNAVAILABLE;
         }
 
-        uint32_t HeightInCentimeters(VARIABLE_IS_NOT_USED uint8_t& heigth /* @out */) const override
+        Core::hresult HeightInCentimeters(VARIABLE_IS_NOT_USED uint8_t& heigth /* @out */) const override
         {
             return Core::ERROR_UNAVAILABLE;
         }
 
-        uint32_t HDCPProtection(HDCPProtectionType& value) const override
+        Core::hresult HDCPProtection(HDCPProtectionType& value) const override
         {
             uint32_t result = Core::ERROR_NONE;
 
@@ -604,12 +604,12 @@ namespace Plugin {
             return result;
         }
 
-        uint32_t HDCPProtection(VARIABLE_IS_NOT_USED const HDCPProtectionType value) override
+        Core::hresult HDCPProtection(VARIABLE_IS_NOT_USED const HDCPProtectionType value) override
         {
             return Core::ERROR_UNAVAILABLE;
         }
 
-        uint32_t PortName(VARIABLE_IS_NOT_USED string& name) const override
+        Core::hresult PortName(VARIABLE_IS_NOT_USED string& name) const override
         {
             return Core::ERROR_UNAVAILABLE;
         }
