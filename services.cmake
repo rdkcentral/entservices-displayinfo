@@ -20,6 +20,10 @@
 #
 
 add_definitions (-DUSE_IARM)
+option(USE_IARM "USE_IARM" ON)
+
+add_definitions (-DUSE_IARM_BUS)
+option(USE_IARM_BUS "USE_IARM_BUS" ON)
 option(USE_IARM_BUS "USE_IARM" ON)
 
 add_definitions (-DUSE_IARMBUS)
