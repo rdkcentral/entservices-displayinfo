@@ -306,7 +306,7 @@ namespace Plugin {
             , _propertiesLock()
             , _audioPassthrough(false)
             , _edid()
-            , _hdcpLevel(Exchange::IConnectionProperties::HDCPProtectionType::HDCP_Unencrypted)
+            , _hdcpLevel(Exchange::IConnectionProperties::HDCPProtectionType::HDCP_UNENCRYPTED)
         {
             RequeryProperties();
         };
@@ -367,10 +367,10 @@ namespace Plugin {
                     _hdcpLevel = Exchange::IConnectionProperties::HDCPProtectionType::HDCP_1X;
                 } else {
                     TRACE(Trace::Error, (_T("Received HDCP value: %s"), hdcpStr.c_str()));
-                    _hdcpLevel = Exchange::IConnectionProperties::HDCPProtectionType::HDCP_Unencrypted;
+                    _hdcpLevel = Exchange::IConnectionProperties::HDCPProtectionType::HDCP_UNENCRYPTED;
                 }
             } else {
-                _hdcpLevel = Exchange::IConnectionProperties::HDCPProtectionType::HDCP_Unencrypted;
+                _hdcpLevel = Exchange::IConnectionProperties::HDCPProtectionType::HDCP_UNENCRYPTED;
             }
 
             TRACE(Trace::Information, (_T("HDCP protection level: %d"), _hdcpLevel));
