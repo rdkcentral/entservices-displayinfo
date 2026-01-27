@@ -31,6 +31,8 @@ add_definitions (-DHAS_API_SYSTEM)
 add_definitions (-DHAS_API_POWERSTATE)
 add_definitions(-DRDK_LOG_MILESTONE)
 
+add_definitions (-DUSE_TR_69)
+
 add_definitions (-DUSE_DS)
 
 option(PLUGIN_TELEMETRY "PLUGIN_TELEMETRY" ON)
