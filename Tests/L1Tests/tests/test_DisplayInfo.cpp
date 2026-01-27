@@ -975,7 +975,7 @@ protected:
             EXPECT_CALL(*p_videoOutputPortMock, GetHdmiPreference())
                 .WillOnce(::testing::Return(test.mockHdcpVersion));
     
-            Exchange::IConnectionProperties::HDCPProtectionType hdcp = Exchange::IConnectionProperties::HDCP_Unencrypted;
+            Exchange::IConnectionProperties::HDCPProtectionType hdcp = Exchange::IConnectionProperties::HDCP_AUTO;
             uint32_t result = static_cast<const Exchange::IConnectionProperties*>(connectionProperties)->HDCPProtection(hdcp);
     
             EXPECT_EQ(result, Core::ERROR_NONE);
@@ -1474,7 +1474,7 @@ TEST_F(DisplayInfoTestTest, GetHDCPProtection_ExceptionHandling)
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
 
-    Exchange::IConnectionProperties::HDCPProtectionType hdcp = Exchange::IConnectionProperties::HDCP_Unencrypted;
+    Exchange::IConnectionProperties::HDCPProtectionType hdcp = Exchange::IConnectionProperties::HDCP_AUTO;
     uint32_t result = static_cast<const Exchange::IConnectionProperties*>(connectionProperties)->HDCPProtection(hdcp);
 
     // Should still return Core::ERROR_NONE as implementation catches exception
