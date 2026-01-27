@@ -46,7 +46,7 @@ public:
         , _totalGpuRam(0)
         , _audioPassthrough(false)
         , _EDID()
-        , _value(HDCP_AUTO)
+        , _value(HDCP_Unencrypted)
         , _adminLock()
         , _activity(*this) {
 
@@ -278,7 +278,7 @@ private:
 
             Config()
                 : Core::JSON::Container()
-                , hdcpLevel(Exchange::IConnectionProperties::HDCPProtectionType::HDCP_AUTO)
+                , hdcpLevel(Exchange::IConnectionProperties::HDCPProtectionType::HDCP_Unencrypted)
             {
                 Add(_T("hdcplevel"), &hdcpLevel);
             }
