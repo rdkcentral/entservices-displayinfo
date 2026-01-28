@@ -112,7 +112,7 @@ const string HdcpProfile::Initialize(PluginHost::IShell *service)
 ### Requirement
 
 - Deinitialize() must clean up all resources acquired during Initialize(). It must release resources in reverse order of initialization.
-- Every pointer or instance must be checked for nullptr before cleanup.
+- Ensure that every pointer or instance is checked for nullptr before cleanup.
 
 **Example:**
 
@@ -252,7 +252,7 @@ void HdcpProfile::Deinitialize(PluginHost::IShell* service) {
 
 ### Deactivated
 
-Each plugin should implement the deactivated method. In Deactivated, it should be checked if remote connectionId matches your plugin's connectionId. If it matches your plugin's connectionId, the plugin should submit a deactivation job to handle the out-of-process failure gracefully.
+Each plugin should implement the `Deactivated()` method. In the `Deactivated()` method, check if the remote `connectionId` matches your plugin's `connectionId`. If it matches your plugin's `connectionId`, the plugin should submit a deactivation job to handle the out-of-process failure gracefully.
 
 ### Example
 

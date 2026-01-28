@@ -64,4 +64,4 @@ When adding a new plugin in `CMakeLists.txt`, you **must** also update the follo
 **Summary:**  
 Whenever a new plugin is registered via `CMakeLists.txt`, always update:
 - `cov_build.sh` (add plugin flag to Coverity scan build step)
-- All test CI workflows (`L1-tests.yml`, `L2-tests.yml`, `L2-tests-oop.yml`) to include your plugin flag so that your plugin’s code quality and tests are assured!
+- All test CI workflows (`L1-tests.yml`, `L2-tests.yml`, `L2-tests-oop.yml`) to include your plugin flag to ensure your plugin's code quality and tests are properly validated.
