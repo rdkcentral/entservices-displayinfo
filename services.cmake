@@ -28,6 +28,7 @@ option(USE_IARM_BUS "USE_IARM_BUS" ON)
 add_definitions (-DUSE_IARMBUS)
 
 add_definitions (-DUSE_TR_69)
+add_definitions (-DHAS_API_SYSTEM)
 
 add_definitions (-DUSE_DS)
 
@@ -54,4 +55,9 @@ endif()
 if (BUILD_ENABLE_TELEMETRY_LOGGING)
     message("Building with telemetry logging")
     add_definitions (-DENABLE_TELEMETRY_LOGGING)
+endif()
+
+if (ENABLE_RFC_MANAGER)
+    message("Using binary for RFC Maintenance task")
+    add_definitions (-DENABLE_RFC_MANAGER=ON)
 endif()
