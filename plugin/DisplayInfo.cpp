@@ -88,6 +88,7 @@ namespace Plugin {
                     _displayProperties = _connectionProperties->QueryInterface<Exchange::IDisplayProperties>();
                     if (_displayProperties == nullptr) {
                         SYSLOG(Logging::Startup, (_T("Display Properties service is unavailable.")));
+                        printf("Test coverity flow: %s\n");
                     }
                     else
                     {
