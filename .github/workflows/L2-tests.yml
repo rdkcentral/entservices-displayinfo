@@ -101,7 +101,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-displayinfo
           path: entservices-displayinfo
-          ref: feature/RDKEMW-12948
+          ref: develop
 
       - name: Checkout entservices-testframework
         uses: actions/checkout@v3
