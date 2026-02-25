@@ -211,12 +211,60 @@ public:
     }
     Core::hresult Width(uint32_t& value) const override
     {
-        value = SoC_GetGraphicsWidth();
+        std::vector<uint8_t> edidVec;
+        value = 0;
+        uint32_t ret = GetEdidBytes(edidVec);
+        if (ret == Core::ERROR_NONE)
+        {
+            uint32_t edidLen = edidVec.size();
+            unsigned char* edidbytes = new unsigned char [edidLen];
+            std::copy(edidVec.begin(), edidVec.end(), edidbytes);
+            if (edid_parser::EDID_Verify(edidbytes, edidLen) == edid_parser::EDID_STATUS_OK)
+            {
+                edid_parser::edid_data_t data_ptr;
+                edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
+                value = data_ptr.res.width;
+                TRACE(Trace::Information, (_T("Width from EDID = %d"), value));
+            }
+            else
+            {
+                TRACE(Trace::Error, (_T("EDID Verification failed")));
+            }
+            delete[] edidbytes;
+        }
+        else
+        {
+            TRACE(Trace::Error, (_T("HDMI not connected")));
+        }
         return (Core::ERROR_NONE);
     }
     Core::hresult Height(uint32_t& value) const override
     {
-        value = SoC_GetGraphicsHeight();
+        std::vector<uint8_t> edidVec;
+        value = 0;
+        uint32_t ret = GetEdidBytes(edidVec);
+        if (ret == Core::ERROR_NONE)
+        {
+            uint32_t edidLen = edidVec.size();
+            unsigned char* edidbytes = new unsigned char [edidLen];
+            std::copy(edidVec.begin(), edidVec.end(), edidbytes);
+            if (edid_parser::EDID_Verify(edidbytes, edidLen) == edid_parser::EDID_STATUS_OK)
+            {
+                edid_parser::edid_data_t data_ptr;
+                edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
+                value = data_ptr.res.height;
+                TRACE(Trace::Information, (_T("Height from EDID = %d"), value));
+            }
+            else
+            {
+                TRACE(Trace::Error, (_T("EDID Verification failed")));
+            }
+            delete[] edidbytes;
+        }
+        else
+        {
+            TRACE(Trace::Error, (_T("HDMI not connected")));
+        }
         return (Core::ERROR_NONE);
     }
     Core::hresult VerticalFreq(uint32_t& value) const override
@@ -316,24 +364,35 @@ public:
 
     Core::hresult WidthInCentimeters(uint8_t& width /* @out */) const override
     {
-        int ret = Core::ERROR_NONE;
-        std::vector<uint8_t> edidVec;
-        ret = GetEdidBytes(edidVec);
-        if (Core::ERROR_NONE == ret)
+        width = 0;
+        try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
-            if(edidVec.size() > EDID_MAX_VERTICAL_SIZE)
+            ::device::VideoOutputPort vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort.c_str());
+            if (vPort.isDisplayConnected())
             {
-                width = edidVec[EDID_MAX_HORIZONTAL_SIZE];
-                TRACE(Trace::Information, (_T("Width in cm = %d"), width));
-            }
-            else
-            {
-                TRACE(Trace::Information, (_T("Failed to get Display Size!")));
-                ret = Core::ERROR_GENERAL;
+                int ret = Core::ERROR_NONE;
+                std::vector<uint8_t> edidVec;
+                ret = GetEdidBytes(edidVec);
+                if (Core::ERROR_NONE == ret)
+                {
+                    if(edidVec.size() > EDID_MAX_VERTICAL_SIZE)
+                    {
+                        width = edidVec[EDID_MAX_HORIZONTAL_SIZE];
+                        TRACE(Trace::Information, (_T("Width in cm = %d"), width));
+                    }
+                    else
+                    {
+                        TRACE(Trace::Information, (_T("Failed to get Display Size!")));
+                    }
+                }
             }
         }
-        return ret;
+        catch (const device::Exception& err)
+        {
+            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+        }
+        return (Core::ERROR_NONE);
     }
 
     Core::hresult HeightInCentimeters(uint8_t& height /* @out */) const override

@@ -30,7 +30,7 @@
 #include <mutex>
 #include <boost/filesystem.hpp>
 
-#include "../../../plugin/DeviceSettings/PlatformImplementation.cpp"
+#include "../../../DisplayInfo/DeviceSettings/PlatformImplementation.cpp"
 #include "DisplayInfo.h"
 #include "DisplayInfoMock.h"
 
@@ -444,10 +444,84 @@ protected:
         EXPECT_EQ(jsonBody->Audiopassthrough, true);
         EXPECT_EQ(jsonBody->Connected, true);
 
-        // EDID-based width/height in cm
-        EXPECT_EQ(jsonBody->Width, 1920);
-        EXPECT_EQ(jsonBody->Height, 1080);
     }
+
+    /**
+         * @brief Test the width and height function to validate EDID-based width and height parsing
+         *
+         * This test ensures that:
+         * - EDID data is properly parsed to extract width and height information
+         * - The mock EDID parser returns expected width and height values
+         * - The DisplayInfo implementation correctly maps parsed data to the API response
+         * - COMRPC interface properly handles the width and height query
+         */
+     TEST_F(DisplayInfoTestTest, WidthAndHeight){
+        device::VideoOutputPort videoOutputPort;
+        device::AudioOutputPort audioOutputPort;
+        device::Display display;
+
+        ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
+            .WillByDefault(::testing::ReturnRef(videoOutputPort));
+
+        ON_CALL(*p_videoOutputPortMock, getDisplay())
+            .WillByDefault(::testing::ReturnRef(display));
+
+        ON_CALL(*p_videoOutputPortMock, getAudioOutputPort())
+            .WillByDefault(::testing::ReturnRef(audioOutputPort));
+
+        ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+            .WillByDefault(::testing::Return(true));
+
+        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](std::vector<uint8_t> &edidVec2) {
+                    edidVec2 = std::vector<uint8_t>({ 't', 'e', 's', 't' });
+                }));
+
+        ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_,::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](unsigned char* bytes, size_t count) {
+                    // Mocked verification logic
+                    return edid_parser::EDID_STATUS_OK;
+                }));
+
+        ON_CALL(*p_edidParserMock, EDID_Parse(::testing::_,::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](unsigned char* bytes, size_t count, edid_parser::edid_data_t* data_ptr) {
+                    // Mocked parsing logic
+                    edid_parser::edid_res_t res = {0};
+                    res.refresh = 60;
+                    res.width = 70;
+                    res.height = 35;
+                    data_ptr->res = res; // Set the expected width and height
+                    return edid_parser::EDID_STATUS_OK;
+                }));
+
+
+        uint32_t _connectionId = 0;
+        Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
+        ASSERT_NE(connectionProperties, nullptr);
+
+        uint32_t width = 0;
+        uint32_t result = Core::ERROR_GENERAL;
+		result = connectionProperties->Width(width);
+
+        uint32_t widthVal = 70;
+
+        EXPECT_EQ(result, Core::ERROR_NONE);
+        EXPECT_EQ(width, widthVal); // Change 70 to the expected value for your test/mocks
+
+        uint32_t height = 0;
+        result = connectionProperties->Height(height);
+
+        uint32_t heightVal = 35;
+
+        EXPECT_EQ(result, Core::ERROR_NONE);
+        EXPECT_EQ(height, heightVal); // Change 70 to the expected value for your test/mocks
+
+        // Release the interface after use
+        connectionProperties->Release();
+     }
 
         /**
          * @brief Test the VerticalFreq function to validate EDID-based vertical refresh rate parsing
