@@ -437,7 +437,8 @@ public:
             if (vPort.isDisplayConnected())
             {
                 vPort.getDisplay().getEDIDBytes(edidVec2);
-                edidVec = edidVec2;//edidVec must be "unknown" unless we successfully get to this line
+                // Coverity Fix: ID 11 - COPY_INSTEAD_OF_MOVE: Use std::move for vector assignment
+                edidVec = std::move(edidVec2);//edidVec must be "unknown" unless we successfully get to this line
             }
             else
             {
