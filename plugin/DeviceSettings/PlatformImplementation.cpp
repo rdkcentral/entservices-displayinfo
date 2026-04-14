@@ -387,6 +387,10 @@ public:
                     }
                 }
             }
+            else
+            {
+                LOGERR("HDMI not connected");
+            }
         }
         catch (const device::Exception& err)
         {
@@ -417,6 +421,10 @@ public:
                     LOGINFO("Failed to get Display Size!");
                 }
             }
+            else
+            {
+                LOGERR("HDMI not connected");
+            }
         }
         catch (const device::Exception& err)
         {
@@ -442,7 +450,7 @@ public:
             }
             else
             {
-                LOGINFO("failure: HDMI not connected!");
+                LOGERR("failure: HDMI not connected!");
                 ret = Core::ERROR_GENERAL;
             }
         }
@@ -455,6 +463,14 @@ public:
         uint16_t size = std::min(edidVec.size(), (size_t)std::numeric_limits<uint16_t>::max());
         if(edidVec.size() > (size_t)std::numeric_limits<uint16_t>::max())
             LOGERR("Size too large to use ToString base64 wpe api");
+
+        // Log EDID data in base64 format
+        if (size > 0) {
+            string edidBase64;
+            Core::ToString(edidVec.data(), size, true, edidBase64);
+            LOGINFO("EDID base64: %s", edidBase64.c_str());
+        }
+
         int i = 0;
         for (; i < length && i < size; i++)
         {
