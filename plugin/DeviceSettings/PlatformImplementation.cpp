@@ -323,7 +323,7 @@ public:
         }
         else
         {
-            LOGINFO("No STB video ouptut ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
+            LOGINFO("No STB video output ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
         }
         return (Core::ERROR_NONE);
     }
@@ -357,7 +357,7 @@ public:
         }
         else
         {
-            LOGINFO("No STB video ouptut ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
+            LOGINFO("No STB video output ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
         }
         return (Core::ERROR_NONE);
     }
