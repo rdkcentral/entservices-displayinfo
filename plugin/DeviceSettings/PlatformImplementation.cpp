@@ -69,22 +69,22 @@ public:
 
             //TODO: this is probably per process so we either need to be running in our own process or be carefull no other plugin is calling it
             device::Manager::Initialize();
-            TRACE(Trace::Information, (_T("device::Manager::Initialize success")));
+            LOGINFO("device::Manager::Initialize success");
         }
         // FIX(Coverity): Memory Safety - Catch specific exceptions
         // Reason: Catching all exceptions (...) masks errors; catch specific types for better debugging
         // Impact: No API signature changes. Improved error handling and logging.
         catch(const device::Exception& err)
         {
-           TRACE(Trace::Error, (_T("device::Manager::Initialize failed: code=%d, message=%s"), err.getCode(), err.what()));
+           LOGERR("device::Manager::Initialize failed: code=%d, message=%s", err.getCode(), err.what());
         }
         catch(const std::exception& e)
         {
-           TRACE(Trace::Error, (_T("device::Manager::Initialize failed: %s"), e.what()));
+           LOGERR("device::Manager::Initialize failed: %s", e.what());
         }
         catch(...)
         {
-           TRACE(Trace::Error, (_T("device::Manager::Initialize failed with unknown exception")));
+           LOGERR("device::Manager::Initialize failed with unknown exception");
         }
     }
 
@@ -189,7 +189,7 @@ public:
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+            LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
             ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -204,7 +204,7 @@ public:
         }
         catch (const device::Exception& err)
         {
-           TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+           LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
            return Core::ERROR_GENERAL;
         }
         return (Core::ERROR_NONE);
@@ -224,17 +224,17 @@ public:
                 edid_parser::edid_data_t data_ptr;
                 edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
                 value = data_ptr.res.width;
-                TRACE(Trace::Information, (_T("Width from EDID = %d"), value));
+                LOGINFO("Width from EDID = %d", value);
             }
             else
             {
-                TRACE(Trace::Error, (_T("EDID Verification failed")));
+                LOGERR("EDID Verification failed");
             }
             delete[] edidbytes;
         }
         else
         {
-            TRACE(Trace::Error, (_T("HDMI not connected")));
+            LOGERR("HDMI not connected");
         }
         return (Core::ERROR_NONE);
     }
@@ -253,17 +253,17 @@ public:
                 edid_parser::edid_data_t data_ptr;
                 edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
                 value = data_ptr.res.height;
-                TRACE(Trace::Information, (_T("Height from EDID = %d"), value));
+                LOGINFO("Height from EDID = %d", value);
             }
             else
             {
-                TRACE(Trace::Error, (_T("EDID Verification failed")));
+                LOGERR("EDID Verification failed");
             }
             delete[] edidbytes;
         }
         else
         {
-            TRACE(Trace::Error, (_T("HDMI not connected")));
+            LOGERR("HDMI not connected");
         }
         return (Core::ERROR_NONE);
     }
@@ -281,18 +281,18 @@ public:
                 edid_parser::edid_data_t data_ptr;
                 edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
                 value = data_ptr.res.refresh;
-                TRACE(Trace::Information, (_T("Vertical frequency = %d"), value));
+                LOGINFO("Vertical frequency = %d", value);
             }
             else
             {
-                TRACE(Trace::Information, (_T("EDID Verification failed")));
+                LOGINFO("EDID Verification failed");
                 ret = Core::ERROR_GENERAL;
             }
             delete[] edidbytes;
         }
         else
         {
-            TRACE(Trace::Information, (_T("HDMI not connected")));
+            LOGINFO("HDMI not connected");
             ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -318,12 +318,12 @@ public:
             }
             catch(const device::Exception& err)
             {
-                TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+                LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
             }
         }
         else
         {
-            TRACE(Trace::Information, (_T("No STB video ouptut ports connected to TV, returning HDCP as unencrypted %d"), hdcpversion));
+            LOGINFO("No STB video ouptut ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
         }
         return (Core::ERROR_NONE);
     }
@@ -347,17 +347,17 @@ public:
                 device::VideoOutputPort vPort = device::Host::getInstance().getVideoOutputPort(portname);
                 if(!vPort.SetHdmiPreference(hdcpversion))
                 {
-                    TRACE(Trace::Information, (_T("HDCPProtection: SetHdmiPreference failed")));
+                    LOGINFO("HDCPProtection: SetHdmiPreference failed");
                 }
             }
             catch(const device::Exception& err)
             {
-                TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+                LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
             }
         }
         else
         {
-            TRACE(Trace::Information, (_T("No STB video ouptut ports connected to TV, returning HDCP as unencrypted %d"), hdcpversion));
+            LOGINFO("No STB video ouptut ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
         }
         return (Core::ERROR_NONE);
     }
@@ -379,18 +379,18 @@ public:
                     if(edidVec.size() > EDID_MAX_VERTICAL_SIZE)
                     {
                         width = edidVec[EDID_MAX_HORIZONTAL_SIZE];
-                        TRACE(Trace::Information, (_T("Width in cm = %d"), width));
+                        LOGINFO("Width in cm = %d", width);
                     }
                     else
                     {
-                        TRACE(Trace::Information, (_T("Failed to get Display Size!")));
+                        LOGINFO("Failed to get Display Size!");
                     }
                 }
             }
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+            LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
         }
         return (Core::ERROR_NONE);
     }
@@ -410,17 +410,17 @@ public:
                 if(edidVec.size() > EDID_MAX_VERTICAL_SIZE)
                 {
                     height = edidVec[EDID_MAX_VERTICAL_SIZE];
-                    TRACE(Trace::Information, (_T("Height in cm = %d"), height));
+                    LOGINFO("Height in cm = %d", height);
                 }
                 else
                 {
-                    TRACE(Trace::Information, (_T("Failed to get Display Size!")));
+                    LOGINFO("Failed to get Display Size!");
                 }
             }
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+            LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
         }
         return (Core::ERROR_NONE);
     }
@@ -442,7 +442,7 @@ public:
             }
             else
             {
-                TRACE(Trace::Information, (_T("failure: HDMI not connected!")));
+                LOGINFO("failure: HDMI not connected!");
                 ret = Core::ERROR_GENERAL;
             }
         }
@@ -477,14 +477,14 @@ public:
                                                 || (vPort.getType() == device::VideoOutputPortType::kInternal)))
                 {
                     name = vPort.getName();
-                    TRACE(Trace::Information, (_T("Connected video output port = %s"), name));
+                    LOGINFO("Connected video output port = %s", name.c_str());
                     break;
                 }
             }
         }
         catch(const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+            LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
         }
         return (Core::ERROR_NONE);
     }
@@ -499,7 +499,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _cs = vPort.getColorSpace();
-                TRACE(Trace::Information, (_T("colour space = %d"), _cs ));
+                LOGINFO("colour space = %d", _cs);
                 switch(_cs)
                 {
                     case dsDISPLAY_COLORSPACE_RGB:
@@ -519,13 +519,13 @@ public:
             }
             else
             {
-                TRACE(Trace::Error, (_T("HDMI not connected!")));
+                LOGERR("HDMI not connected!");
                 ret = Core::ERROR_GENERAL;
             }
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("caught an exception: %d, %s"),err.getCode(), err.what()));
+            LOGERR("caught an exception: %d, %s", err.getCode(), err.what());
             ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -564,7 +564,7 @@ public:
         }
         catch (const device::Exception& err)
         {
-           TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+           LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
            ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -580,7 +580,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _colour = vPort.getColorDepth();
-                TRACE(Trace::Information, (_T("colour depth = %d"),_colour));
+                LOGINFO("colour depth = %d", _colour);
                 switch(_colour)
                 {
                     case 8:
@@ -596,13 +596,13 @@ public:
             }
             else
             {
-                TRACE(Trace::Error, (_T("HDMI not connected!")));
+                LOGERR("HDMI not connected!");
                 ret = Core::ERROR_GENERAL;
             }
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("caught an exception: %d, %s"),err.getCode(), err.what()));
+            LOGERR("caught an exception: %d, %s", err.getCode(), err.what());
             ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -618,7 +618,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _qr = vPort.getQuantizationRange();
-                TRACE(Trace::Information, (_T("quantization range = %d"),_qr));
+                LOGINFO("quantization range = %d", _qr);
                 switch (_qr)
                 {
                     case dsDISPLAY_QUANTIZATIONRANGE_LIMITED:
@@ -632,13 +632,13 @@ public:
             }
             else
             {
-                TRACE(Trace::Error, (_T("HDMI not connected!")));
+                LOGERR("HDMI not connected!");
                 ret = Core::ERROR_GENERAL;
             }
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("caught an exception: %d, %s"),err.getCode(), err.what()));
+            LOGERR("caught an exception: %d, %s", err.getCode(), err.what());
             ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -659,7 +659,7 @@ public:
                 edid_parser::edid_data_t data_ptr;
                 edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
                 uint32_t colorimetry_info = data_ptr.colorimetry_info;
-                TRACE(Trace::Information, (_T("colorimetry = %d"),colorimetry_info));
+                LOGINFO("colorimetry = %d", colorimetry_info);
                 if (!colorimetry_info) colorimetryCaps.push_back(COLORIMETRY_UNKNOWN);
                 if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC601) colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
                 if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC709) colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
@@ -672,14 +672,14 @@ public:
             }
             else
             {
-                TRACE(Trace::Error, (_T("EDID Verification failed")));
+                LOGERR("EDID Verification failed");
                 ret = Core::ERROR_GENERAL;
             }
             delete[] edidbytes;
         }
         else
         {
-            TRACE(Trace::Error, (_T("HDMI not connected!")));
+            LOGERR("HDMI not connected!");
             ret = Core::ERROR_GENERAL;
         }
         colorimetry = Core::Service<ColorimetryIteratorImplementation>::Create<Exchange::IDisplayProperties::IColorimetryIterator>(colorimetryCaps);
@@ -696,7 +696,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _eotf = vPort.getVideoEOTF();
-                TRACE(Trace::Information, (_T("videoEOTF = %d"),_eotf));
+                LOGINFO("videoEOTF = %d", _eotf);
                 switch (_eotf)
                 {
                     /* bt1886 = sdr; smpte2084 = hdr10; bt2100 = HLG*/
@@ -710,13 +710,13 @@ public:
             }
             else
             {
-                TRACE(Trace::Error, (_T("HDMI not connected!")));
+                LOGERR("HDMI not connected!");
                 ret = Core::ERROR_GENERAL;
             }
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("caught an exception: %d, %s"),err.getCode(), err.what()));
+            LOGERR("caught an exception: %d, %s", err.getCode(), err.what());
             ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -738,20 +738,20 @@ public:
                 vPort.getTVHDRCapabilities(&capabilities);
             }
             else {
-                TRACE(Trace::Error, (_T("getTVHDRCapabilities failure: HDMI not connected!")));
+                LOGERR("getTVHDRCapabilities failure: HDMI not connected!");
             }
         }
         catch(const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+            LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
         }
         catch(const std::exception& err)
         {
-            TRACE(Trace::Error, (_T("Standard exception: %s"), err.what()));
+            LOGERR("Standard exception: %s", err.what());
         }
         catch(...)
         {
-            TRACE(Trace::Error, (_T("Unknown exception occurred")));
+            LOGERR("Unknown exception occurred");
         }
         if(!capabilities) hdrCapabilities.push_back(HDR_OFF);
         if(capabilities & dsHDRSTANDARD_HDR10) hdrCapabilities.push_back(HDR_10);
@@ -781,15 +781,15 @@ public:
         }
         catch(const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+            LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
         }
         catch(const std::exception& err)
         {
-            TRACE(Trace::Error, (_T("Standard exception: %s"), err.what()));
+            LOGERR("Standard exception: %s", err.what());
         }
         catch(...)
         {
-            TRACE(Trace::Error, (_T("Unknown exception occurred")));
+            LOGERR("Unknown exception occurred");
         }
         if(!capabilities) hdrCapabilities.push_back(HDR_OFF);
         if(capabilities & dsHDRSTANDARD_HDR10) hdrCapabilities.push_back(HDR_10);
@@ -819,14 +819,14 @@ public:
             }
             else
             {
-                TRACE(Trace::Information, (_T("IsOutputHDR failure: HDMI not connected!")));
+                LOGINFO("IsOutputHDR failure: HDMI not connected!");
             }
         }
         catch(const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("Exception during DeviceSetting library call. code = %d message = %s"), err.getCode(), err.what()));
+            LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
         }
-        TRACE(Trace::Information, (_T("Output HDR = %s"), isHdr ? "Yes" : "No"));
+        LOGINFO("Output HDR = %s", isHdr ? "Yes" : "No");
 
         type = isHdr? HDR_10 : HDR_OFF;
         return (Core::ERROR_NONE);
@@ -858,14 +858,14 @@ private:
             }
             else
             {
-                TRACE(Trace::Error, (_T("HDMI not connected!")));
+                LOGERR("HDMI not connected!");
                 ret = Core::ERROR_GENERAL;
             }
 
         }
         catch (const device::Exception& err)
         {
-            TRACE(Trace::Error, (_T("caught an exception: %d, %s"),err.getCode(), err.what()));
+            LOGERR("caught an exception: %d, %s", err.getCode(), err.what());
             ret = Core::ERROR_GENERAL;
         }
 
