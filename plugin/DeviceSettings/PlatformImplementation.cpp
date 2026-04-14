@@ -69,7 +69,7 @@ public:
 
             //TODO: this is probably per process so we either need to be running in our own process or be carefull no other plugin is calling it
             device::Manager::Initialize();
-            LOGINFO("device::Manager::Initialize success");
+            TRACE(Trace::Information, (_T("device::Manager::Initialize success")));
         }
         // FIX(Coverity): Memory Safety - Catch specific exceptions
         // Reason: Catching all exceptions (...) masks errors; catch specific types for better debugging
@@ -281,18 +281,18 @@ public:
                 edid_parser::edid_data_t data_ptr;
                 edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
                 value = data_ptr.res.refresh;
-                LOGINFO("Vertical frequency = %d", value);
+                TRACE(Trace::Information, (_T("Vertical frequency = %d"), value));
             }
             else
             {
-                LOGINFO("EDID Verification failed");
+                LOGERR("EDID Verification failed");
                 ret = Core::ERROR_GENERAL;
             }
             delete[] edidbytes;
         }
         else
         {
-            LOGINFO("HDMI not connected");
+            LOGERR("HDMI not connected");
             ret = Core::ERROR_GENERAL;
         }
         return ret;
@@ -323,7 +323,7 @@ public:
         }
         else
         {
-            LOGINFO("No STB video output ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
+            LOGERR("No STB video output ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
         }
         return (Core::ERROR_NONE);
     }
@@ -347,7 +347,7 @@ public:
                 device::VideoOutputPort vPort = device::Host::getInstance().getVideoOutputPort(portname);
                 if(!vPort.SetHdmiPreference(hdcpversion))
                 {
-                    LOGINFO("HDCPProtection: SetHdmiPreference failed");
+                    TRACE(Trace::Information, (_T("HDCPProtection: SetHdmiPreference failed")));
                 }
             }
             catch(const device::Exception& err)
@@ -357,7 +357,7 @@ public:
         }
         else
         {
-            LOGINFO("No STB video output ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
+            LOGERR("No STB video output ports connected to TV, returning HDCP as unencrypted %d", hdcpversion);
         }
         return (Core::ERROR_NONE);
     }
@@ -383,7 +383,7 @@ public:
                     }
                     else
                     {
-                        LOGINFO("Failed to get Display Size!");
+                        LOGERR("Failed to get Display Size!");
                     }
                 }
             }
@@ -418,7 +418,7 @@ public:
                 }
                 else
                 {
-                    LOGINFO("Failed to get Display Size!");
+                    LOGERR("Failed to get Display Size!");
                 }
             }
             else
@@ -493,7 +493,7 @@ public:
                                                 || (vPort.getType() == device::VideoOutputPortType::kInternal)))
                 {
                     name = vPort.getName();
-                    LOGINFO("Connected video output port = %s", name.c_str());
+                    TRACE(Trace::Information, (_T("Connected video output port = %s"), name));
                     break;
                 }
             }
@@ -515,7 +515,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _cs = vPort.getColorSpace();
-                LOGINFO("colour space = %d", _cs);
+                TRACE(Trace::Information, (_T("colour space = %d"), _cs ));
                 switch(_cs)
                 {
                     case dsDISPLAY_COLORSPACE_RGB:
@@ -596,7 +596,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _colour = vPort.getColorDepth();
-                LOGINFO("colour depth = %d", _colour);
+                TRACE(Trace::Information, (_T("colour depth = %d"),_colour));
                 switch(_colour)
                 {
                     case 8:
@@ -634,7 +634,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _qr = vPort.getQuantizationRange();
-                LOGINFO("quantization range = %d", _qr);
+                TRACE(Trace::Information, (_T("quantization range = %d"),_qr));
                 switch (_qr)
                 {
                     case dsDISPLAY_QUANTIZATIONRANGE_LIMITED:
@@ -675,7 +675,7 @@ public:
                 edid_parser::edid_data_t data_ptr;
                 edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
                 uint32_t colorimetry_info = data_ptr.colorimetry_info;
-                LOGINFO("colorimetry = %d", colorimetry_info);
+                TRACE(Trace::Information, (_T("colorimetry = %d"),colorimetry_info));
                 if (!colorimetry_info) colorimetryCaps.push_back(COLORIMETRY_UNKNOWN);
                 if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC601) colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
                 if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC709) colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
@@ -712,7 +712,7 @@ public:
             if (vPort.isDisplayConnected())
             {
                 int _eotf = vPort.getVideoEOTF();
-                LOGINFO("videoEOTF = %d", _eotf);
+                TRACE(Trace::Information, (_T("videoEOTF = %d"),_eotf));
                 switch (_eotf)
                 {
                     /* bt1886 = sdr; smpte2084 = hdr10; bt2100 = HLG*/
@@ -835,14 +835,14 @@ public:
             }
             else
             {
-                LOGINFO("IsOutputHDR failure: HDMI not connected!");
+                LOGERR("IsOutputHDR failure: HDMI not connected!");
             }
         }
         catch(const device::Exception& err)
         {
             LOGERR("Exception during DeviceSetting library call. code = %d message = %s", err.getCode(), err.what());
         }
-        LOGINFO("Output HDR = %s", isHdr ? "Yes" : "No");
+        TRACE(Trace::Information, (_T("Output HDR = %s"), isHdr ? "Yes" : "No"));
 
         type = isHdr? HDR_10 : HDR_OFF;
         return (Core::ERROR_NONE);
