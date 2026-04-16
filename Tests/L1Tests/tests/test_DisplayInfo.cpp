@@ -1030,7 +1030,7 @@ protected:
 
         // Arrange: Set up mocks for no display connected
         ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
-            .WillByDefault(::testing::Return(videoPort));
+            .WillByDefault(::testing::Return(std::move(videoPort)));
         ON_CALL(*p_hostImplMock, getVideoOutputPorts())
             .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
         ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
@@ -1053,6 +1053,7 @@ protected:
         ASSERT_NE(colorimetry, nullptr);
         EXPECT_FALSE(colorimetry->IsValid());
         colorimetry->Release();
+        displayProperties->Release();
     }
 
     TEST_F(DisplayInfoTestTest, GetHDCPProtection)
