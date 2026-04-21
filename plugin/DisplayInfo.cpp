@@ -19,6 +19,8 @@
 
 #include "DisplayInfo.h"
 
+#include "UtilsLogging.h"
+
 #define API_VERSION_NUMBER_MAJOR 1
 #define API_VERSION_NUMBER_MINOR 0
 #define API_VERSION_NUMBER_PATCH 6
@@ -88,6 +90,7 @@ namespace Plugin {
                     _displayProperties = _connectionProperties->QueryInterface<Exchange::IDisplayProperties>();
                     if (_displayProperties == nullptr) {
                         SYSLOG(Logging::Startup, (_T("Display Properties service is unavailable.")));
+                        LOGINFO("Display Properties service is unavailable. %s")
                     }
                     else
                     {
