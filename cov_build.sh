@@ -66,7 +66,7 @@ cmake -G Ninja -S "$GITHUB_WORKSPACE" -B build/entservices-displayinfo \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/wpa_ctrl_mock.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/secure_wrappermock.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/readprocMockInterface.h \
--Wall -Werror -Wno-error=format \
+-Wall -Werror -Wno-error=format -Wno-format \
 -Wl,-wrap,system -Wl,-wrap,popen -Wl,-wrap,syslog \
 -DENABLE_TELEMETRY_LOGGING -DUSE_IARMBUS \
 -DHAS_RBUS -DUSE_THUNDER_R4=ON -DTHUNDER_VERSION=4 -DTHUNDER_VERSION_MAJOR=4 -DTHUNDER_VERSION_MINOR=4" \
