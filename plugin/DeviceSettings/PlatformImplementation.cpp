@@ -76,7 +76,7 @@ public:
         // Impact: No API signature changes. Improved error handling and logging.
         catch(const device::Exception& err)
         {
-           LOGERR("device::Manager::Initialize failed: code=%d, message=%s", err.getCode(), err.what());
+           LOGERR("device::Manager::Initialize failed: code=%d, message=%s", err.what());
         }
         catch(const std::exception& e)
         {
