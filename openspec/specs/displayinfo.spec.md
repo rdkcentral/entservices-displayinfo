@@ -43,6 +43,7 @@ subsystem is ready.
 | REQ-F-08 | `IDisplayProperties` MUST NOT block plugin initialisation: if unavailable at startup, the plugin MUST still initialise successfully and return `ERROR_UNAVAILABLE` on related endpoints. |
 | REQ-F-09 | HDCPProtection MUST support both getter and setter semantics on platforms that allow preference configuration (DeviceSettings, BCM/RPI). |
 | REQ-F-10 | The plugin MUST register with the `Platform` precondition and MUST NOT activate before that precondition is satisfied. |
+| REQ-F-11 | The DeviceSettings backend `Colorimetry()` MUST return an empty `IColorimetryIterator` and `ERROR_NONE` for all failure paths (display not connected, EDID read/verify failure, `device::Exception`). It MUST NOT return `ERROR_GENERAL` to callers. |
 
 ### Non-Functional
 
@@ -52,6 +53,28 @@ subsystem is ready.
 | REQ-NF-02 | Event delivery latency for `updated` MUST be less than 500 ms after the hardware signal is received. |
 | REQ-NF-03 | The plugin MUST be free of memory leaks on both the happy path and on interface acquisition failures during `Initialize`. |
 | REQ-NF-04 | Exception-unsafe calls into platform libraries MUST be wrapped in try/catch with typed exception handlers (no bare `catch(...)`). |
+| REQ-NF-05 | The DeviceSettings backend `Colorimetry()` MUST use `std::vector<unsigned char>` (or equivalent RAII container) for EDID byte buffers. Manual `new[]`/`delete[]` heap allocation is prohibited. |
+
+### DeviceSettings Backend Colorimetry Scenarios
+
+#### Scenario: No display connected — DeviceSettings backend
+- **WHEN** `isDisplayConnected()` returns false
+- **THEN** `Colorimetry()` SHALL set the output iterator to an empty list
+- **THEN** `Colorimetry()` SHALL return `ERROR_NONE`
+
+#### Scenario: EDID present but verification fails — DeviceSettings backend
+- **WHEN** `EDID_Verify()` returns a non-OK status
+- **THEN** `Colorimetry()` SHALL set the output iterator to an empty list
+- **THEN** `Colorimetry()` SHALL return `ERROR_NONE`
+
+#### Scenario: DeviceSettings library exception — DeviceSettings backend
+- **WHEN** a `device::Exception` is thrown during EDID retrieval or parsing
+- **THEN** `Colorimetry()` SHALL set the output iterator to an empty list
+- **THEN** `Colorimetry()` SHALL return `ERROR_NONE`
+
+#### Scenario: Implementation uses vector for EDID buffer
+- **WHEN** `Colorimetry()` reads EDID bytes from the display
+- **THEN** the implementation SHALL store EDID bytes in a `std::vector<unsigned char>` (not a raw `new unsigned char[]`)
 
 ---
 
@@ -926,3 +949,4 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan including all 29 L1 test cases; Conformance Testing updated with per-test-case table.
 - 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan.
 - 2026-04-29 — displayinfo-colorimetry change — Added `IDisplayProperties` orphaned methods to Covered Code (closes gap G-01); `Colorimetry` disconnected-path fix documented.
+- 2026-04-29 — openspec-sync-specs — Merged ADDED requirements from displayinfo-colorimetry change: REQ-F-11 (Colorimetry error handling), REQ-NF-05 (RAII memory management), DeviceSettings backend Colorimetry scenarios.
