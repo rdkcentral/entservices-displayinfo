@@ -695,8 +695,11 @@ public:
         }
         else
         {
-            LOGERR("HDMI not connected!");
-            ret = Core::ERROR_GENERAL;
+            // No display connected: return empty list with success (ERROR_NONE).
+            // This is not an error condition — clients should treat an empty list as
+            // "no colorimetry data available" rather than a failure.
+            LOGINFO("No display connected, returning empty colorimetry list");
+            ret = Core::ERROR_NONE;
         }
         colorimetry = Core::Service<ColorimetryIteratorImplementation>::Create<Exchange::IDisplayProperties::IColorimetryIterator>(colorimetryCaps);
         return (colorimetry != nullptr && ret == Core::ERROR_NONE ? Core::ERROR_NONE : Core::ERROR_GENERAL);

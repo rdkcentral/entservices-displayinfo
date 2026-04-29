@@ -18,8 +18,8 @@ The plugin SHALL expose a read-only JSON-RPC property `DisplayInfo.colorimetry` 
 
 #### Scenario: Backend does not support colorimetry discovery
 - **WHEN** the platform backend returns `ERROR_UNAVAILABLE` for the `Colorimetry()` interface method (e.g., Linux/DRM, BCM/RPI stubs)
-- **THEN** `DisplayInfo.colorimetry` SHALL return an empty array
-- **THEN** the return code SHALL be `ERROR_NONE`
+- **THEN** `DisplayInfo.colorimetry` SHALL return `ERROR_UNAVAILABLE` to the caller
+- **THEN** implementing colorimetry support for those backends is out of scope for this change (tracked as a future change)
 
 #### Scenario: EDID present but colorimetry bitmask is zero
 - **WHEN** the connected display's EDID is valid but the colorimetry extension block reports zero (no extended colorimetry capabilities)

@@ -847,6 +847,11 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoImplementation::TVCapabilities` / `STBCapabilities`
     - `DisplayInfoImplementation::HDRSetting`
     - `DisplayInfoImplementation::ColorSpace`
+    - `DisplayInfoImplementation::FrameRate`
+    - `DisplayInfoImplementation::ColourDepth`
+    - `DisplayInfoImplementation::QuantizationRange`
+    - `DisplayInfoImplementation::Colorimetry`
+    - `DisplayInfoImplementation::EOTF`
 - `plugin/DisplayInfo.conf.in`:
     - Plugin configuration template
 - `plugin/DisplayInfo.config`:
@@ -920,3 +925,4 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - 2026-04-29 — Added individual JSON-RPC property subsections for all 20 auto-bound endpoints (`isaudiopassthrough`, `connected`, `totalgpuram`, `freegpuram`, `width`, `height`, `verticalfreq`, `hdcpprotection`, `edid`, `hdrsetting`, `tvcapabilities`, `stbcapabilities`, `widthincentimeters`, `heightincentimeters`, `colorspace`, `framerate`, `colourdepth`, `quantizationrange`, `colorimetry`, `eotf`); per-condition return-code tables and enum value tables added for each. Added `PortName`, `TVCapabilities`, `STBCapabilities`, `ColorSpace`, `FrameRate`, `ColourDepth`, `QuantizationRange`, `Colorimetry`, `EOTF` to Covered Code.
 - 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan including all 29 L1 test cases; Conformance Testing updated with per-test-case table.
 - 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan.
+- 2026-04-29 — displayinfo-colorimetry change — Added `IDisplayProperties` orphaned methods to Covered Code (closes gap G-01); `Colorimetry` disconnected-path fix documented.

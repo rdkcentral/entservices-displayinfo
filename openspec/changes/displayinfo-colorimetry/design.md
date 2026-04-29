@@ -48,9 +48,13 @@ The proposal specifies that a missing display must return success with an empty 
 
 ### D-03: Fix only DeviceSettings backend in this change
 
-The Linux/DRM and RPI backends already return `ERROR_UNAVAILABLE`. `JDisplayProperties` maps this to an empty array on the JSON-RPC surface (iterator pointer left null by convention). No code change is needed in those backends — only documentation.
+The Linux/DRM and RPI backends already return `ERROR_UNAVAILABLE`. Upon reading `JDisplayProperties.h` (OQ-01 resolved), it is confirmed that `JDisplayProperties` does **not** map `ERROR_UNAVAILABLE` to an empty array — it propagates the error code directly to the caller. The auto-binding only writes to the JSON result array when `_errorCode == ERROR_NONE` and the iterator is non-null.
 
-**Verification required:** Confirm `JDisplayProperties` null-iterator handling before marking tasks done.
+Consequence: on Linux/DRM and RPI platforms, `DisplayInfo.colorimetry` will respond with `ERROR_UNAVAILABLE`. This is acceptable for this change — the user requirement (`no display → empty list + ERROR_NONE`) applies only to the DeviceSettings backend scenario. Fixing Linux/DRM and RPI to return `ERROR_NONE + empty iterator` is a separate future change.
+
+The spec scenario "Backend does not support colorimetry discovery" has been updated accordingly to reflect `ERROR_UNAVAILABLE` (not empty list) for those backends.
+
+**No JSON-RPC-layer change required** — only the DeviceSettings backend disconnected-path fix is in scope.
 
 ### D-04: No new JSON-RPC registration code required
 
@@ -67,5 +71,8 @@ The Linux/DRM and RPI backends already return `ERROR_UNAVAILABLE`. `JDisplayProp
 
 ## Open Questions
 
-- OQ-01: Does `JDisplayProperties` auto-generated code already handle a null `IColorimetryIterator*` output by emitting an empty JSON array, or does it propagate the error code? This determines whether any JSON-RPC-layer change is needed.
+- ~~OQ-01~~: **RESOLVED** — `JDisplayProperties.h` confirmed via source inspection:
+  - `colorimetry` IS auto-bound by `JDisplayProperties::Register`. ✓
+  - `ERROR_NONE` + null iterator → empty JSON array `[]` returned to client. ✓
+  - `ERROR_UNAVAILABLE` (or any non-`ERROR_NONE`) → error propagated to client; JSON array NOT populated. Consequence: D-03 was partially incorrect. Linux/DRM and RPI backends will surface `ERROR_UNAVAILABLE` to clients (not empty list). Scoped fix: DeviceSettings "no display" case only.
 - OQ-02: Should `colorimetry` be included in the composite `displayinfo` property in a future change? If so, the schema change should be planned now to avoid a breaking bump later.
