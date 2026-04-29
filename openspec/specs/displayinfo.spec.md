@@ -689,14 +689,39 @@ Configuration is injected via `IShell::ConfigLine()` and parsed per platform.
 |-----------|-------|
 | `tests/test_DisplayInfo.cpp` | Unit tests for `DisplayInfoImplementation` (DeviceSettings backend) using GTest mocks for `device::Host`, video output ports, EDID parser, IARM, and DRM. |
 
-Tests cover:
-- `TotalGpuRam` / `FreeGpuRam` via `SoC_*` mocks.
-- `IsAudioPassthrough`, `Connected`, `Width`, `Height` via DeviceSettings mocks.
-- `HDCPProtection` getter and setter paths.
-- `HDRSetting` via mocked HDR type file.
-- `WidthInCentimeters`, `HeightInCentimeters` via EDID mock.
-- `EDID` binary data retrieval.
-- `Updated` event notification dispatch.
+Test cases:
+
+| Test name | Coverage |
+|-----------|----------|
+| `Info_AllProperties` | Aggregated `displayinfo` property — all fields |
+| `WidthAndHeight` | `Width()` and `Height()` from EDID |
+| `VerticalFrequency` | `VerticalFreq()` from EDID |
+| `EDID` | Raw EDID byte retrieval |
+| `WidthInCentimeters` | Physical width from EDID display size descriptor |
+| `HeightInCentimeters` | Physical height from EDID display size descriptor |
+| `ColorSpace` | Colour space enum mapping |
+| `FrameRate` | Frame rate enum mapping (all supported values) |
+| `ColourDepth` | Colour depth enum mapping |
+| `QuantizationRange` | Quantization range enum mapping |
+| `Colorimetry` | Colorimetry EDID bitmask parsing |
+| `GetHDCPProtection` | HDCP getter enum mapping |
+| `SetHDCPProtection` | HDCP setter round-trip |
+| `EOTF` | EOTF enum mapping (HDR10, HLG, unknown) |
+| `TVCapabilities` | TV HDR capability bitmask parsing |
+| `STBCapabilities` | STB HDR capability bitmask parsing |
+| `Connected_ExceptionHandling` | `Connected()` throws `device::Exception` |
+| `IsAudioPassthrough_ExceptionHandling` | `IsAudioPassthrough()` throws `device::Exception` |
+| `ColorSpace_ExceptionHandling` | `ColorSpace()` throws `device::Exception` |
+| `FrameRate_ExceptionHandling` | `FrameRate()` throws `device::Exception` |
+| `ColourDepth_ExceptionHandling` | `ColourDepth()` throws `device::Exception` |
+| `QuantizationRange_ExceptionHandling` | `QuantizationRange()` throws `device::Exception` |
+| `EOTF_ExceptionHandling` | `EOTF()` throws `device::Exception` |
+| `GetHDCPProtection_ExceptionHandling` | `HDCPProtection` getter throws `device::Exception` |
+| `SetHDCPProtection_ExceptionHandling` | `HDCPProtection` setter throws `device::Exception` |
+| `TVCapabilities_ExceptionHandling` | `TVCapabilities()` throws `device::Exception` |
+| `STBCapabilities_ExceptionHandling` | `STBCapabilities()` throws `device::Exception` |
+| `EDID_ExceptionHandling` | `EDID()` throws `device::Exception` |
+| `ResolutionChange_NotificationTest` | `Updated` event dispatch on resolution change |
 
 ### L2 Tests (`Tests/L2Tests/`)
 
@@ -733,13 +758,19 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfo::UnregisterAll`
     - `DisplayInfo::get_displayinfo`
     - `DisplayInfo::event_updated`
+- `plugin/DisplayInfoTracing.h`:
+    - `class HDCPDetailedInfo` (trace/log helper for HDCP events)
 - `plugin/Module.h`:
     - Module name definition (`Plugin_DisplayInfo`)
 - `plugin/Module.cpp`:
-    - `SERVICE_REGISTRATION` macro invocation
+    - `MODULE_NAME_DECLARATION` / `SERVICE_REGISTRATION` macro invocation
 - `plugin/DeviceSettings/PlatformImplementation.cpp`:
+    - `DisplayInfoImplementation::DisplayInfoImplementation`
+    - `DisplayInfoImplementation::~DisplayInfoImplementation`
     - `DisplayInfoImplementation::TotalGpuRam`
     - `DisplayInfoImplementation::FreeGpuRam`
+    - `DisplayInfoImplementation::Register`
+    - `DisplayInfoImplementation::Unregister`
     - `DisplayInfoImplementation::IsAudioPassthrough`
     - `DisplayInfoImplementation::Connected`
     - `DisplayInfoImplementation::Width`
@@ -767,17 +798,91 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `SoC_GetFreeGpuRam`
     - `SoC_GetGraphicsWidth`
     - `SoC_GetGraphicsHeight`
+- `plugin/DeviceSettings/RPI/SoC_abstraction.cpp`:
+    - `parseLine` / `getMemInfo` (GPU memory parsing via `/proc/meminfo`)
+    - `getGraphicSize` / `getPrimaryPlane` (DRM primary plane resolution)
+- `plugin/DeviceSettings/RPI/kms.h`:
+    - `kms_ctx` struct (DRM KMS context: connector, encoder, CRTC, plane IDs)
+- `plugin/DeviceSettings/RPI/kms.c`:
+    - KMS device setup and mode-setting helpers
+- `plugin/Linux/DRMConnector.h`:
+    - `Linux::DRMConnector::DRMConnector`
+    - `Linux::DRMConnector::IsConnected`
+    - `Linux::DRMConnector::Width`
+    - `Linux::DRMConnector::Height`
+    - `Linux::DRMConnector::RefreshRate`
+    - `Linux::DRMConnector::InitializeWithConnector`
 - `plugin/Linux/PlatformImplementation.cpp`:
-    - `GraphicsProperties::TotalGpuRam` / `FreeGpuRam`
-    - `HDRProperties::HDRSetting` / `GetHDRLevel`
-    - `DisplayProperties` (DRM-based width, height, HDCP, EDID, colorimetry)
-    - `UdevObserverType` (hot-plug detection via netlink)
+    - `UdevObserverType::Register` / `Unregister` / `ReceiveData` (netlink hot-plug)
+    - `GraphicsProperties::TotalGpuRam`
+    - `GraphicsProperties::FreeGpuRam`
+    - `HDRProperties::HDRSetting`
+    - `HDRProperties::TVCapabilities`
+    - `HDRProperties::STBCapabilities`
+    - `HDRProperties::GetHDRLevel`
+    - `DisplayProperties::Width` / `Height` / `RefreshRate` / `Connected`
+    - `DisplayProperties::HDCP` / `EDID` / `Reauthenticate` / `RequeryProperties`
+    - `DisplayInfoImplementation::Configure`
+    - `DisplayInfoImplementation::Register` / `Unregister`
+    - `DisplayInfoImplementation::IsAudioPassthrough`
+    - `DisplayInfoImplementation::Connected`
+    - `DisplayInfoImplementation::Width` / `Height` / `VerticalFreq`
+    - `DisplayInfoImplementation::EDID`
+    - `DisplayInfoImplementation::WidthInCentimeters` / `HeightInCentimeters`
+    - `DisplayInfoImplementation::HDCPProtection` (getter; setter returns `ERROR_UNAVAILABLE`)
+    - `DisplayInfoImplementation::PortName`
+    - `DisplayInfoImplementation::Dispatch`
+    - `DisplayInfoImplementation::EventQueue::Worker` (async event dispatch thread)
 - `plugin/RPI/PlatformImplementation.cpp`:
-    - `DisplayInfoImplementation` (BCM VideoCore backend — all four interfaces)
+    - `DisplayInfoImplementation::Configure`
+    - `DisplayInfoImplementation::TotalGpuRam` / `FreeGpuRam`
+    - `DisplayInfoImplementation::Register` / `Unregister`
+    - `DisplayInfoImplementation::IsAudioPassthrough`
+    - `DisplayInfoImplementation::Connected`
+    - `DisplayInfoImplementation::Width` / `Height` / `VerticalFreq`
+    - `DisplayInfoImplementation::HDCPProtection` (getter + setter)
+    - `DisplayInfoImplementation::EDID`
+    - `DisplayInfoImplementation::WidthInCentimeters` / `HeightInCentimeters`
+    - `DisplayInfoImplementation::PortName`
+    - `DisplayInfoImplementation::TVCapabilities` / `STBCapabilities`
+    - `DisplayInfoImplementation::HDRSetting`
+    - `DisplayInfoImplementation::ColorSpace`
 - `plugin/DisplayInfo.conf.in`:
     - Plugin configuration template
 - `plugin/DisplayInfo.config`:
     - CMake-driven configuration generation
+- `Tests/L1Tests/tests/test_DisplayInfo.cpp`:
+    - `DisplayInfoTest` (GTest base fixture)
+    - `DisplayInfoTestTest` (derived fixture providing live service)
+    - `DisplayInfoTestTest::Info_AllProperties`
+    - `DisplayInfoTestTest::WidthAndHeight`
+    - `DisplayInfoTestTest::VerticalFrequency`
+    - `DisplayInfoTestTest::EDID`
+    - `DisplayInfoTestTest::WidthInCentimeters`
+    - `DisplayInfoTestTest::HeightInCentimeters`
+    - `DisplayInfoTestTest::ColorSpace`
+    - `DisplayInfoTestTest::FrameRate`
+    - `DisplayInfoTestTest::ColourDepth`
+    - `DisplayInfoTestTest::QuantizationRange`
+    - `DisplayInfoTestTest::Colorimetry`
+    - `DisplayInfoTestTest::GetHDCPProtection`
+    - `DisplayInfoTestTest::SetHDCPProtection`
+    - `DisplayInfoTestTest::EOTF`
+    - `DisplayInfoTestTest::TVCapabilities`
+    - `DisplayInfoTestTest::STBCapabilities`
+    - `DisplayInfoTestTest::Connected_ExceptionHandling`
+    - `DisplayInfoTestTest::IsAudioPassthrough_ExceptionHandling`
+    - `DisplayInfoTestTest::ColorSpace_ExceptionHandling`
+    - `DisplayInfoTestTest::FrameRate_ExceptionHandling`
+    - `DisplayInfoTestTest::ColourDepth_ExceptionHandling`
+    - `DisplayInfoTestTest::QuantizationRange_ExceptionHandling`
+    - `DisplayInfoTestTest::EOTF_ExceptionHandling`
+    - `DisplayInfoTestTest::GetHDCPProtection_ExceptionHandling`
+    - `DisplayInfoTestTest::SetHDCPProtection_ExceptionHandling`
+    - `DisplayInfoTestTest::TVCapabilities_ExceptionHandling`
+    - `DisplayInfoTestTest::STBCapabilities_ExceptionHandling`
+    - `DisplayInfoTestTest::EDID_ExceptionHandling`
+    - `DisplayInfoTestTest::ResolutionChange_NotificationTest`
 
 ---
 
@@ -813,3 +918,5 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 
 - 2026-04-29 — Initial spec generated from codebase exploration (v1.0.6).
 - 2026-04-29 — Added individual JSON-RPC property subsections for all 20 auto-bound endpoints (`isaudiopassthrough`, `connected`, `totalgpuram`, `freegpuram`, `width`, `height`, `verticalfreq`, `hdcpprotection`, `edid`, `hdrsetting`, `tvcapabilities`, `stbcapabilities`, `widthincentimeters`, `heightincentimeters`, `colorspace`, `framerate`, `colourdepth`, `quantizationrange`, `colorimetry`, `eotf`); per-condition return-code tables and enum value tables added for each. Added `PortName`, `TVCapabilities`, `STBCapabilities`, `ColorSpace`, `FrameRate`, `ColourDepth`, `QuantizationRange`, `Colorimetry`, `EOTF` to Covered Code.
+- 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan including all 29 L1 test cases; Conformance Testing updated with per-test-case table.
+- 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan.
