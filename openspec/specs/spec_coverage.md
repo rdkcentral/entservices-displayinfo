@@ -11,14 +11,14 @@
 
 | Category | Weight | Score | Earned |
 |----------|--------|-------|--------|
-| Code to Spec Coverage | 40% | 91% | **36.5 / 40** |
+| Code to Spec Coverage | 40% | 96% | **38.5 / 40** |
 | Architecture HLA Specification | 10% | 100% | **10 / 10** |
 | External Interface Specification | 10% | 90% | **9 / 10** |
 | Security Specification | 10% | 70% | **7 / 10** |
 | Versioning & Compatibility | 10% | 80% | **8 / 10** |
 | Conformance Testing & Validation | 10% | 60% | **6 / 10** |
 | Performance Specification | 10% | 50% | **5 / 10** |
-| **TOTAL** | **100%** | | **81.5 / 100** |
+| **TOTAL** | **100%** | | **83.5 / 100** |
 
 ---
 
@@ -38,22 +38,23 @@
 | `plugin/DisplayInfoTracing.h` | 1 | 1 | 0 | 100% |
 | `plugin/Module.h` | 1 | 1 | 0 | 100% |
 | `plugin/Module.cpp` | 1 | 1 | 0 | 100% |
-| `plugin/DeviceSettings/PlatformImplementation.cpp` | 28 | 22 | 6 | 79% |
+| `plugin/DeviceSettings/PlatformImplementation.cpp` | 28 | 28 | 0 | 100% |
 | `plugin/DeviceSettings/SoC_abstraction.h` | 4 | 4 | 0 | 100% |
 | `plugin/DeviceSettings/RPI/SoC_abstraction.cpp` | 8 | 4 | 4 | 50% |
 | `plugin/DeviceSettings/RPI/kms.h` | 1 | 1 | 0 | 100% |
 | `plugin/DeviceSettings/RPI/kms.c` | 5 | 3 | 2 | 60% |
 | `plugin/Linux/DRMConnector.h` | 6 | 5 | 1 | 83% |
 | `plugin/Linux/PlatformImplementation.cpp` | 43 | 35 | 8 | 81% |
-| `plugin/RPI/PlatformImplementation.cpp` | 27 | 22 | 5 | 81% |
-| `Tests/L1Tests/tests/test_DisplayInfo.cpp` | 1 | 1 | 0 | 100% |
-| **Total** | **139** | **113** | **26** | **81%** |
+| `plugin/RPI/PlatformImplementation.cpp` | 27 | 26 | 1 | 96% |
+| `Tests/L1Tests/tests/test_DisplayInfo.cpp` | 3 | 3 | 0 | 100% |
+| **Total** | **139** | **123** | **16** | **89%** |
 
-> **Note on private methods:** 16 of the 26 uncovered are private/internal helpers
+> **Note on private methods:** All 16 uncovered methods are private/internal helpers
 > (e.g. `QueryDisplayProperties`, `GetMemory`, `GetValueForKey`, `GetMessageValues`).
-> The 10 uncovered **public interface methods** are listed below.
+> All 10 previously orphaned **public interface methods** are now covered following the
+> `displayinfo-colorimetry` change (G-01 closed).
 
-**Score:** 20 × 0.85 (adjusted for private-method context) = **17 / 20**
+**Score:** 20 × 0.925 (adjusted for private-method context) = **18.5 / 20**
 
 ---
 
@@ -91,28 +92,17 @@
 
 ---
 
-### 1d. No Orphaned Code (4.5 / 5)
+### 1d. No Orphaned Code (5 / 5)
 
-10 public interface methods across two backends have no spec coverage:
+All previously orphaned public interface methods are now covered. The `displayinfo-colorimetry`
+change (2026-04-29) added `Colorimetry`, `ColorSpace`, `FrameRate`, `ColourDepth`,
+`QuantizationRange`, and `EOTF` to the `## Covered Code` section of `displayinfo.spec.md`,
+closing gap **G-01**.
 
-| File | Orphaned Method | Interface |
-|------|----------------|-----------|
-| `plugin/DeviceSettings/PlatformImplementation.cpp` | `ColorSpace` | `IDisplayProperties` |
-| `plugin/DeviceSettings/PlatformImplementation.cpp` | `FrameRate` | `IDisplayProperties` |
-| `plugin/DeviceSettings/PlatformImplementation.cpp` | `ColourDepth` | `IDisplayProperties` |
-| `plugin/DeviceSettings/PlatformImplementation.cpp` | `QuantizationRange` | `IDisplayProperties` |
-| `plugin/DeviceSettings/PlatformImplementation.cpp` | `Colorimetry` | `IDisplayProperties` |
-| `plugin/DeviceSettings/PlatformImplementation.cpp` | `EOTF` | `IDisplayProperties` |
-| `plugin/RPI/PlatformImplementation.cpp` | `FrameRate` | `IDisplayProperties` |
-| `plugin/RPI/PlatformImplementation.cpp` | `ColourDepth` | `IDisplayProperties` |
-| `plugin/RPI/PlatformImplementation.cpp` | `QuantizationRange` | `IDisplayProperties` |
-| `plugin/RPI/PlatformImplementation.cpp` | `EOTF` | `IDisplayProperties` |
+The single remaining uncovered method in `plugin/RPI/PlatformImplementation.cpp` is a
+private/internal helper — not a public interface method.
 
-> **Pattern:** All orphaned public methods belong to `IDisplayProperties`. The spec covers this
-> interface at a surface level but does not enumerate `ColorSpace`, `FrameRate`, `ColourDepth`,
-> `QuantizationRange`, `Colorimetry`, and `EOTF` in its Covered Code or Requirements sections.
-
-**Score:** 5 × 0.90 = **4.5 / 5**
+**Score:** **5 / 5**
 
 ---
 
@@ -181,7 +171,7 @@
 | Sub-criterion | Max | Score | Notes |
 |---------------|-----|-------|-------|
 | Presence of conformance tests | 3 | **3** | L1 GTest suite and L2 integration tests present |
-| Test coverage | 3 | **2** | L1 covers most DeviceSettings methods; L2 test cases are TBD; no test for Linux/DRM or RPI backends |
+| Test coverage | 3 | **2** | L1 covers all DeviceSettings Colorimetry paths (happy, disconnected, EDID-fail); L2 TBD; no Linux/DRM or RPI tests |
 | Test documentation | 2 | **1** | Test file listed but no `cmake --build` / `ctest` invocation documented |
 | Validation results | 2 | **0** | No pass/fail test results recorded in the spec |
 
@@ -218,7 +208,7 @@
 
 | # | Gap | Affected Category | Suggested Fix |
 |---|-----|------------------|---------------|
-| G-01 | `IDisplayProperties` methods `ColorSpace`, `FrameRate`, `ColourDepth`, `QuantizationRange`, `Colorimetry`, `EOTF` not in spec | Code Coverage | Add these methods to `## Covered Code` and expand Requirements/External Interfaces |
+| ~~G-01~~ | ~~`IDisplayProperties` methods `ColorSpace`, `FrameRate`, `ColourDepth`, `QuantizationRange`, `Colorimetry`, `EOTF` not in spec~~ | ~~Code Coverage~~ | **Resolved 2026-04-29** — all methods added to `## Covered Code` via `displayinfo-colorimetry` change |
 | G-02 | No security tests or validation evidence | Security | Add a security test section or CI job testing ACL enforcement and EDID rejection |
 | G-03 | No performance test results | Performance | Add benchmark results or CI performance job output |
 
