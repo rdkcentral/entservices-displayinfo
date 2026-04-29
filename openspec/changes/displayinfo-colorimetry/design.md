@@ -1,0 +1,71 @@
+## Context
+
+The `DisplayInfo` plugin aggregates four C++ interfaces (`IGraphicsProperties`, `IConnectionProperties`, `IHDRProperties`, `IDisplayProperties`) into a single WPEFramework JSON-RPC service. `IDisplayProperties` — which includes `Colorimetry()` — is already registered at runtime via `Exchange::JDisplayProperties::Register(*this, _displayProperties)` in `DisplayInfo::Initialize`. This means the JSON-RPC auto-binding for `colorimetry` is already wired; the implementation exists in the DeviceSettings backend, and the spec is simply missing.
+
+The gap is a combination of:
+1. **Behaviour contract missing**: No spec defines the expected return value when no display is connected. The DeviceSettings backend currently returns `ERROR_GENERAL` in that case (should be `ERROR_NONE` with empty iterator).
+2. **Spec coverage gap**: `Colorimetry`, `ColorSpace`, `FrameRate`, `ColourDepth`, `QuantizationRange`, and `EOTF` are orphaned (identified as gap G-01 in coverage report).
+3. **Linux/DRM backend**: Returns `ERROR_UNAVAILABLE` for colorimetry (no EDID/DRM colorimetry parsing available), which the JSON-RPC layer should treat as empty list.
+4. **RPI backend**: Returns `ERROR_UNAVAILABLE` (stub only).
+
+Backend summary:
+
+| Backend | `Colorimetry()` today | Required behaviour |
+|---------|-----------------------|--------------------|
+| DeviceSettings | Parses EDID via libds; returns `ERROR_GENERAL` when disconnected | Return empty list + `ERROR_NONE` when disconnected |
+| Linux/DRM | `ERROR_UNAVAILABLE` | Treat as empty list (no DRM colorimetry source available) |
+| BCM/RPI | `ERROR_UNAVAILABLE` | Treat as empty list (stub) |
+| Nexus | External; unknown | Out of scope |
+
+## Goals / Non-Goals
+
+**Goals:**
+- Define the complete behavioural contract for `DisplayInfo.colorimetry` in a dedicated spec.
+- Fix the DeviceSettings backend: return empty `IColorimetryIterator` with `ERROR_NONE` when no display is connected (instead of `ERROR_GENERAL`).
+- Document the Linux/DRM and RPI `ERROR_UNAVAILABLE` handling as an accepted empty-list response.
+- Add L1 test cases covering connected, disconnected, and unavailable scenarios.
+- Close spec coverage gap G-01 by adding `Colorimetry` (and the other orphaned `IDisplayProperties` methods) to the `displayinfo.spec.md` Covered Code section.
+
+**Non-Goals:**
+- Implementing EDID colorimetry parsing for the Linux/DRM backend (separate change).
+- Implementing colorimetry for the BCM/RPI backend beyond the current stub.
+- Changing the Nexus backend (out of scope and fetched externally).
+- Adding a `colorimetry` field to the existing `displayinfo` composite property — it remains a separate property.
+
+## Decisions
+
+### D-01: Separate JSON-RPC property, not a field in `displayinfo`
+
+`IDisplayProperties::Colorimetry()` returns an iterator, not a scalar. Adding it to the `displayinfo` composite property would require embedding an array inside the existing `DisplayinfoData` struct, which is a breaking change to the schema. Instead, the `JDisplayProperties` auto-binding already exposes it as an independent property `DisplayInfo.1.colorimetry`.
+
+**Alternative considered:** Add `colorimetry` as an array field to `DisplayinfoData`. Rejected — breaking schema change, and large aggregated responses with iterators degrade performance.
+
+### D-02: Empty iterator + `ERROR_NONE` is the canonical "no display" response
+
+The proposal specifies that a missing display must return success with an empty list. This aligns with how `TVCapabilities` and `STBCapabilities` are handled in other plugins and is the least-surprise behaviour for clients polling periodically.
+
+**Alternative considered:** Return `ERROR_UNAVAILABLE` when disconnected. Rejected — forces every client to special-case a non-error condition; empty list is semantically complete.
+
+### D-03: Fix only DeviceSettings backend in this change
+
+The Linux/DRM and RPI backends already return `ERROR_UNAVAILABLE`. `JDisplayProperties` maps this to an empty array on the JSON-RPC surface (iterator pointer left null by convention). No code change is needed in those backends — only documentation.
+
+**Verification required:** Confirm `JDisplayProperties` null-iterator handling before marking tasks done.
+
+### D-04: No new JSON-RPC registration code required
+
+`Exchange::JDisplayProperties::Register(*this, _displayProperties)` is already called in `DisplayInfo::Initialize` when `_displayProperties != nullptr`. The `colorimetry` JSON-RPC property is therefore already registered. The implementation task is solely fixing the DeviceSettings backend return value for the disconnected case.
+
+## Risks / Trade-offs
+
+| Risk | Mitigation |
+|------|-----------|
+| `JDisplayProperties` null-iterator behaviour is undocumented | Read `JDisplayProperties.h` generated code before implementing; add a regression test |
+| DeviceSettings `GetEdidBytes` failure path: `ERROR_GENERAL` is currently the same code for "disconnected" and "EDID parse error" | Distinguish the two error paths: disconnected → empty list + `ERROR_NONE`; EDID parse error → `ERROR_GENERAL` (unchanged) |
+| Colorimetry EDID bitmask mapping may be incomplete (e.g., DCI-P3 maps to `COLORIMETRY_OTHER`) | Document known mapping limitations in spec Open Queries; no code change needed now |
+| Nexus backend behaviour unknown | Mark Nexus as out of scope in spec; add open query |
+
+## Open Questions
+
+- OQ-01: Does `JDisplayProperties` auto-generated code already handle a null `IColorimetryIterator*` output by emitting an empty JSON array, or does it propagate the error code? This determines whether any JSON-RPC-layer change is needed.
+- OQ-02: Should `colorimetry` be included in the composite `displayinfo` property in a future change? If so, the schema change should be planned now to avoid a breaking bump later.
