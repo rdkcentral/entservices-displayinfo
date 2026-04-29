@@ -9,14 +9,27 @@ The spec SHALL document all public methods of `Exchange::IDisplayProperties` imp
 
 ## ADDED Requirements
 
-### Requirement: Colorimetry disconnected path returns empty list with success
-The DeviceSettings backend `Colorimetry()` implementation SHALL return an empty `IColorimetryIterator` with `ERROR_NONE` when no display is connected, rather than `ERROR_GENERAL`.
+### Requirement: Colorimetry always returns success with empty list on non-connected paths (DeviceSettings)
+The DeviceSettings backend `Colorimetry()` implementation SHALL return an empty `IColorimetryIterator` with `ERROR_NONE` for all non-success paths: display not connected, EDID read failure, EDID verification failure, and `device::Exception`. It SHALL never return `ERROR_GENERAL` to callers.
 
 #### Scenario: No display connected — DeviceSettings backend
-- **WHEN** `GetEdidBytes()` returns a non-`ERROR_NONE` code indicating no connected display
+- **WHEN** `isDisplayConnected()` returns false
 - **THEN** `Colorimetry()` SHALL set the output iterator to an empty list
 - **THEN** `Colorimetry()` SHALL return `ERROR_NONE`
 
-#### Scenario: EDID present but parse fails — DeviceSettings backend
-- **WHEN** `GetEdidBytes()` returns `ERROR_NONE` but `EDID_Verify()` fails
-- **THEN** `Colorimetry()` SHALL return `ERROR_GENERAL` (unchanged behaviour)
+#### Scenario: EDID present but verification fails — DeviceSettings backend
+- **WHEN** `EDID_Verify()` returns a non-OK status
+- **THEN** `Colorimetry()` SHALL set the output iterator to an empty list
+- **THEN** `Colorimetry()` SHALL return `ERROR_NONE`
+
+#### Scenario: DeviceSettings library exception — DeviceSettings backend
+- **WHEN** a `device::Exception` is thrown during EDID retrieval or parsing
+- **THEN** `Colorimetry()` SHALL set the output iterator to an empty list
+- **THEN** `Colorimetry()` SHALL return `ERROR_NONE`
+
+### Requirement: Colorimetry implementation uses RAII memory management
+The DeviceSettings backend `Colorimetry()` implementation SHALL NOT use manual heap allocation (`new[]`/`delete[]`) for EDID byte buffers. It SHALL use `std::vector` or equivalent RAII containers.
+
+#### Scenario: Implementation uses vector for EDID buffer
+- **WHEN** `Colorimetry()` reads EDID bytes from the display
+- **THEN** the implementation SHALL store EDID bytes in a `std::vector<unsigned char>` (not a raw `new unsigned char[]`)

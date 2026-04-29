@@ -10,20 +10,22 @@ The gap is a combination of:
 
 Backend summary:
 
-| Backend | `Colorimetry()` today | Required behaviour |
-|---------|-----------------------|--------------------|
-| DeviceSettings | Parses EDID via libds; returns `ERROR_GENERAL` when disconnected | Return empty list + `ERROR_NONE` when disconnected |
-| Linux/DRM | `ERROR_UNAVAILABLE` | Treat as empty list (no DRM colorimetry source available) |
-| BCM/RPI | `ERROR_UNAVAILABLE` | Treat as empty list (stub) |
+| Backend | `Colorimetry()` before this change | Behaviour after this change |
+|---------|------------------------------------|-----------------------------||
+| DeviceSettings | `ERROR_GENERAL` when disconnected or EDID fails | `ERROR_NONE` + empty iterator in ALL paths including EDID parse failure |
+| Linux/DRM | `ERROR_UNAVAILABLE` | Unchanged — `ERROR_UNAVAILABLE` propagated to caller |
+| BCM/RPI | `ERROR_UNAVAILABLE` | Unchanged — `ERROR_UNAVAILABLE` propagated to caller |
 | Nexus | External; unknown | Out of scope |
 
 ## Goals / Non-Goals
 
 **Goals:**
 - Define the complete behavioural contract for `DisplayInfo.colorimetry` in a dedicated spec.
-- Fix the DeviceSettings backend: return empty `IColorimetryIterator` with `ERROR_NONE` when no display is connected (instead of `ERROR_GENERAL`).
-- Document the Linux/DRM and RPI `ERROR_UNAVAILABLE` handling as an accepted empty-list response.
-- Add L1 test cases covering connected, disconnected, and unavailable scenarios.
+- Fix the DeviceSettings backend: return empty `IColorimetryIterator` with `ERROR_NONE` in all non-success paths (disconnected, EDID unavailable, EDID verification failure).
+- Eliminate manual heap allocation (`new[]`/`delete[]`) in `Colorimetry()` — use RAII containers.
+- Wrap all DeviceSettings library calls in a typed exception handler to prevent unhandled exceptions.
+- Document the Linux/DRM and RPI `ERROR_UNAVAILABLE` handling as platform-specific behaviour (separate future change).
+- Add L1 test cases covering connected, disconnected, and EDID-parse-fail scenarios.
 - Close spec coverage gap G-01 by adding `Colorimetry` (and the other orphaned `IDisplayProperties` methods) to the `displayinfo.spec.md` Covered Code section.
 
 **Non-Goals:**
@@ -40,11 +42,13 @@ Backend summary:
 
 **Alternative considered:** Add `colorimetry` as an array field to `DisplayinfoData`. Rejected — breaking schema change, and large aggregated responses with iterators degrade performance.
 
-### D-02: Empty iterator + `ERROR_NONE` is the canonical "no display" response
+### D-02: `ERROR_NONE` + empty iterator is the canonical response for ALL non-connected paths in DeviceSettings
 
-The proposal specifies that a missing display must return success with an empty list. This aligns with how `TVCapabilities` and `STBCapabilities` are handled in other plugins and is the least-surprise behaviour for clients polling periodically.
+The manual implementation extends D-02 further than the original proposal: **all** error paths in the DeviceSettings backend (disconnected, EDID unavailable, EDID verification failure, device exception) return `ERROR_NONE` with an empty `colorimetryCaps` list. This unifies error handling and aligns with the least-surprise principle — clients receive a consistent "no data" signal rather than an error they must distinguish from genuine API failures.
 
-**Alternative considered:** Return `ERROR_UNAVAILABLE` when disconnected. Rejected — forces every client to special-case a non-error condition; empty list is semantically complete.
+**Implementation detail:** The rewritten `Colorimetry()` uses a `try/catch (const device::Exception&)` block wrapping the entire EDID read and parse path. If any step fails, `colorimetryCaps` remains empty and the method always returns `Core::ERROR_NONE` at the end. This also eliminates all manual `new[]/delete[]` allocations in favour of `std::vector<unsigned char>`, removing a previous Coverity finding.
+
+**Alternative considered:** Keep `ERROR_GENERAL` for EDID parse failures to distinguish from a disconnected state. Rejected in the manual implementation — the distinction has no actionable meaning for callers; empty list is the complete and correct response in both cases.
 
 ### D-03: Fix only DeviceSettings backend in this change
 
@@ -64,8 +68,9 @@ The spec scenario "Backend does not support colorimetry discovery" has been upda
 
 | Risk | Mitigation |
 |------|-----------|
-| `JDisplayProperties` null-iterator behaviour is undocumented | Read `JDisplayProperties.h` generated code before implementing; add a regression test |
-| DeviceSettings `GetEdidBytes` failure path: `ERROR_GENERAL` is currently the same code for "disconnected" and "EDID parse error" | Distinguish the two error paths: disconnected → empty list + `ERROR_NONE`; EDID parse error → `ERROR_GENERAL` (unchanged) |
+| `JDisplayProperties` null-iterator behaviour is undocumented | Resolved (OQ-01): binding only populates result when `ERROR_NONE`; null/empty iterator yields `[]` |
+| DeviceSettings EDID failure path previously indistinguishable from disconnected | Resolved by manual impl: unified — both paths return `ERROR_NONE` + empty list |
+| Manual `new[]`/`delete[]` in old implementation risked memory leak on exception | Resolved by manual impl: replaced with `std::vector<unsigned char>` (RAII) |
 | Colorimetry EDID bitmask mapping may be incomplete (e.g., DCI-P3 maps to `COLORIMETRY_OTHER`) | Document known mapping limitations in spec Open Queries; no code change needed now |
 | Nexus backend behaviour unknown | Mark Nexus as out of scope in spec; add open query |
 

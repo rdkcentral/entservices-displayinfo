@@ -9,7 +9,9 @@
 - [x] 2.1 In `plugin/DeviceSettings/PlatformImplementation.cpp`, locate `DisplayInfoImplementation::Colorimetry()`
 - [x] 2.2 Change the `GetEdidBytes()` failure branch: instead of setting `ret = ERROR_GENERAL` and returning, set the output iterator to an empty `ColorimetryIteratorImplementation` list and return `ERROR_NONE`
 - [x] 2.3 Retain `ERROR_GENERAL` for the EDID parse failure path (`EDID_Verify` fails) — this is a genuine error distinct from "not connected"
+    > **Updated by manual implementation:** `ERROR_GENERAL` is NOT retained for EDID parse failures. All non-connected paths (parse fail, exception) now return `ERROR_NONE` + empty list. Manual implementation also replaces `new[]`/`delete[]` with `std::vector` and wraps the full EDID path in `try/catch (const device::Exception&)`.
 - [x] 2.4 Verify the iterator is never left as a dangling pointer in any error path (Coverity compliance)
+    > RAII `std::vector` used; iterator always created at the end of the function.
 
 ## 3. Update Spec — displayinfo.spec.md Covered Code
 
@@ -19,8 +21,8 @@
 ## 4. Add L1 Tests
 
 - [x] 4.1 In `Tests/L1Tests/tests/test_DisplayInfo.cpp`, add test `Colorimetry_Connected_ReturnsColorimetryList`: mock `GetEdidBytes` returning valid EDID bytes with a known colorimetry bitmask; assert returned iterator contains expected `ColorimetryType` values
-- [x] 4.2 Add test `Colorimetry_Disconnected_ReturnsEmptyList`: mock `GetEdidBytes` returning a non-`ERROR_NONE` code; assert returned iterator is empty and return code is `ERROR_NONE`
-- [x] 4.3 Add test `Colorimetry_EdidParseFails_ReturnsGeneralError`: mock `GetEdidBytes` succeeding but `EDID_Verify` failing; assert return code is `ERROR_GENERAL`
+- [x] 4.2 Add test `Colorimetry_Disconnected_ReturnsEmptyList`: mock `isDisplayConnected()` returning false; assert returned iterator is empty and return code is `ERROR_NONE`
+- [x] 4.3 Add test `Colorimetry_EdidParseFails_ReturnsEmptyList`: mock `isDisplayConnected()` returning true, EDID bytes provided, but `EDID_Verify()` failing; assert return code is `ERROR_NONE` and iterator is empty (manual impl no longer returns `ERROR_GENERAL` here)
 - [ ] 4.4 Confirm tests build and pass under the `USE_DEVICESETTINGS` build flag
 
 ## 5. Final Verification

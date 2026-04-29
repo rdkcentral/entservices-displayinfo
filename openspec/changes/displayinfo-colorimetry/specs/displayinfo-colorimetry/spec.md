@@ -21,9 +21,19 @@ The plugin SHALL expose a read-only JSON-RPC property `DisplayInfo.colorimetry` 
 - **THEN** `DisplayInfo.colorimetry` SHALL return `ERROR_UNAVAILABLE` to the caller
 - **THEN** implementing colorimetry support for those backends is out of scope for this change (tracked as a future change)
 
+#### Scenario: EDID read or parse fails on DeviceSettings backend
+- **WHEN** the EDID bytes cannot be read or `EDID_Verify()` fails on the DeviceSettings backend
+- **THEN** `DisplayInfo.colorimetry` SHALL return an empty array
+- **THEN** the return code SHALL be `ERROR_NONE` (failure to parse is treated as "no colorimetry data", not an error)
+
 #### Scenario: EDID present but colorimetry bitmask is zero
 - **WHEN** the connected display's EDID is valid but the colorimetry extension block reports zero (no extended colorimetry capabilities)
 - **THEN** `DisplayInfo.colorimetry` SHALL return an array containing `COLORIMETRY_UNKNOWN`
+
+#### Scenario: Device library throws exception
+- **WHEN** a call into the DeviceSettings library throws a `device::Exception`
+- **THEN** `DisplayInfo.colorimetry` SHALL return an empty array
+- **THEN** the return code SHALL be `ERROR_NONE`
 
 ### Requirement: Colorimetry enum values are well-defined
 The `ColorimetryType` enumeration SHALL cover all colorimetry modes parsed from EDID extension blocks as defined by CTA-861.
