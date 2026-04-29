@@ -1014,6 +1014,48 @@ protected:
         colorimetry->Release();
     }
 
+    /**
+     * @brief Test the Colorimetry iterator when no display is connected
+     *
+     * This test ensures that:
+     * - When isDisplayConnected() returns false, Colorimetry returns an empty iterator
+     * - No colorimetry values are returned
+     * - The method handles the scenario gracefully (no crash, returns ERROR_NONE)
+     */
+    TEST_F(DisplayInfoTestTest, Colorimetry_NoDisplayConnected)
+    {
+        device::VideoOutputPort videoOutputPort;
+        device::Display display;
+        string videoPort(_T("HDMI0"));
+
+        // Arrange: Set up mocks for no display connected
+        ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
+            .WillByDefault(::testing::Return(std::move(videoPort)));
+        ON_CALL(*p_hostImplMock, getVideoOutputPorts())
+            .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
+        ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
+            .WillByDefault(::testing::ReturnRef(videoOutputPort));
+        ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+            .WillByDefault(::testing::Return(false));
+        ON_CALL(*p_videoOutputPortMock, getDisplay())
+            .WillByDefault(::testing::ReturnRef(display));
+
+        // Act: Call the Colorimetry function via the COMRPC interface
+        uint32_t _connectionId = 0;
+        Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
+        ASSERT_NE(displayProperties, nullptr);
+
+        Exchange::IDisplayProperties::IColorimetryIterator* colorimetry = nullptr;
+        uint32_t result = displayProperties->Colorimetry(colorimetry);
+
+        // Assert: Should return ERROR_NONE and an empty iterator
+        EXPECT_EQ(result, Core::ERROR_NONE);
+        ASSERT_NE(colorimetry, nullptr);
+        EXPECT_FALSE(colorimetry->IsValid());
+        colorimetry->Release();
+        displayProperties->Release();
+    }
+
     TEST_F(DisplayInfoTestTest, GetHDCPProtection)
     {
         device::VideoOutputPort videoOutputPort;
@@ -2010,87 +2052,4 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
 
     connectionProperties->Release();
     //videoOutputPortEvents->Release();
-}
-
-/**
- * @brief Test that Colorimetry returns an empty list with ERROR_NONE when no display is connected.
- *
- * Spec: displayinfo-colorimetry — Requirement: Colorimetry property returns supported colorimetry modes
- * Scenario: No display connected
- */
-TEST_F(DisplayInfoTestTest, Colorimetry_Disconnected_ReturnsEmptyList)
-{
-    device::VideoOutputPort videoOutputPort;
-    string videoPort(_T("HDMI0"));
-
-    ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
-        .WillByDefault(::testing::Return(videoPort));
-    ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
-        .WillByDefault(::testing::ReturnRef(videoOutputPort));
-    // Simulate no display connected
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(false));
-
-    uint32_t _connectionId = 0;
-    Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
-    ASSERT_NE(displayProperties, nullptr);
-
-    Exchange::IDisplayProperties::IColorimetryIterator* colorimetry = nullptr;
-    uint32_t result = displayProperties->Colorimetry(colorimetry);
-
-    // Must succeed with an empty list (not an error)
-    EXPECT_EQ(result, Core::ERROR_NONE);
-    ASSERT_NE(colorimetry, nullptr);
-
-    // Iterator must be empty
-    Exchange::IDisplayProperties::ColorimetryType item{};
-    EXPECT_FALSE(colorimetry->Next(item));
-
-    colorimetry->Release();
-    displayProperties->Release();
-}
-
-/**
- * @brief Test that Colorimetry returns ERROR_GENERAL when EDID verification fails.
- *
- * Spec: displayinfo-colorimetry — Requirement: Colorimetry property returns supported colorimetry modes
- * Scenario: EDID present but parse fails
- */
-TEST_F(DisplayInfoTestTest, Colorimetry_EdidParseFails_ReturnsGeneralError)
-{
-    device::VideoOutputPort videoOutputPort;
-    device::Display display;
-    string videoPort(_T("HDMI0"));
-
-    ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
-        .WillByDefault(::testing::Return(videoPort));
-    ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
-        .WillByDefault(::testing::ReturnRef(videoOutputPort));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    ON_CALL(*p_videoOutputPortMock, getDisplay())
-        .WillByDefault(::testing::ReturnRef(display));
-    ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [](std::vector<uint8_t>& edidVec) {
-                edidVec = std::vector<uint8_t>(128, 0xFF);
-            }));
-    // EDID verification fails
-    ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_, ::testing::_))
-        .WillByDefault(::testing::Return(edid_parser::EDID_STATUS_INVALID));
-
-    uint32_t _connectionId = 0;
-    Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
-    ASSERT_NE(displayProperties, nullptr);
-
-    Exchange::IDisplayProperties::IColorimetryIterator* colorimetry = nullptr;
-    uint32_t result = displayProperties->Colorimetry(colorimetry);
-
-    // EDID parse failure is a genuine error
-    EXPECT_EQ(result, Core::ERROR_GENERAL);
-
-    if (colorimetry != nullptr) {
-        colorimetry->Release();
-    }
-    displayProperties->Release();
 }

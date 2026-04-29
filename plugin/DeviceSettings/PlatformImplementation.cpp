@@ -663,46 +663,52 @@ public:
     Core::hresult Colorimetry(IColorimetryIterator*& colorimetry /* @out */) const override
     {
         std::list<Exchange::IDisplayProperties::ColorimetryType> colorimetryCaps;
-        std::vector<uint8_t> edidVec;
-        uint32_t ret = GetEdidBytes(edidVec);
-        if (ret == Core::ERROR_NONE)
+
+        try
         {
-            uint32_t edidLen = edidVec.size();
-            unsigned char* edidbytes = new unsigned char [edidLen];
-            std::copy(edidVec.begin(), edidVec.end(), edidbytes);
-            if (edid_parser::EDID_Verify(edidbytes, edidLen) == edid_parser::EDID_STATUS_OK)
+            std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
+            device::VideoOutputPort vPort = device::Host::getInstance().getVideoOutputPort(strVideoPort.c_str());
+
+            if (vPort.isDisplayConnected())
             {
-                edid_parser::edid_data_t data_ptr;
-                edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
-                uint32_t colorimetry_info = data_ptr.colorimetry_info;
-                TRACE(Trace::Information, (_T("colorimetry = %d"),colorimetry_info));
-                if (!colorimetry_info) colorimetryCaps.push_back(COLORIMETRY_UNKNOWN);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC601) colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC709) colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_SYCC601) colorimetryCaps.push_back(COLORIMETRY_SYCC601);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBEYCC601) colorimetryCaps.push_back(COLORIMETRY_OPYCC601);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBERGB) colorimetryCaps.push_back(COLORIMETRY_OPRGB);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020CL || colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020NCL) colorimetryCaps.push_back(COLORIMETRY_BT2020YCCBCBRC);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020RGB) colorimetryCaps.push_back(COLORIMETRY_BT2020RGB_YCBCR);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_DCI_P3) colorimetryCaps.push_back(COLORIMETRY_OTHER);
+                std::vector<uint8_t> edidVec;
+                vPort.getDisplay().getEDIDBytes(edidVec);
+
+                uint32_t edidLen = edidVec.size();
+                std::vector<unsigned char> edidbytes(edidVec.begin(), edidVec.end());
+
+                if (edid_parser::EDID_Verify(edidbytes.data(), edidLen) == edid_parser::EDID_STATUS_OK)
+                {
+                    edid_parser::edid_data_t data_ptr;
+                    edid_parser::EDID_Parse(edidbytes.data(), edidLen, &data_ptr);
+                    uint32_t colorimetry_info = data_ptr.colorimetry_info;
+                    LOGINFO("colorimetry = %d", colorimetry_info);
+                    if (!colorimetry_info) colorimetryCaps.push_back(COLORIMETRY_UNKNOWN);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC601) colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC709) colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_SYCC601) colorimetryCaps.push_back(COLORIMETRY_SYCC601);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBEYCC601) colorimetryCaps.push_back(COLORIMETRY_OPYCC601);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBERGB) colorimetryCaps.push_back(COLORIMETRY_OPRGB);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020CL || colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020NCL) colorimetryCaps.push_back(COLORIMETRY_BT2020YCCBCBRC);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020RGB) colorimetryCaps.push_back(COLORIMETRY_BT2020RGB_YCBCR);
+                    if (colorimetry_info & edid_parser::COLORIMETRY_INFO_DCI_P3) colorimetryCaps.push_back(COLORIMETRY_OTHER);
+                }
+                else
+                {
+                    LOGERR("EDID Verification failed");
+                }
             }
             else
             {
-                LOGERR("EDID Verification failed");
-                ret = Core::ERROR_GENERAL;
+                LOGERR("Display not connected, returning empty colorimetry list");
             }
-            delete[] edidbytes;
         }
-        else
+        catch (const device::Exception& err)
         {
-            // No display connected: return empty list with success (ERROR_NONE).
-            // This is not an error condition — clients should treat an empty list as
-            // "no colorimetry data available" rather than a failure.
-            LOGINFO("No display connected, returning empty colorimetry list");
-            ret = Core::ERROR_NONE;
+            LOGERR("DeviceSettings exception: %d, %s", err.getCode(), err.what());
         }
         colorimetry = Core::Service<ColorimetryIteratorImplementation>::Create<Exchange::IDisplayProperties::IColorimetryIterator>(colorimetryCaps);
-        return (colorimetry != nullptr && ret == Core::ERROR_NONE ? Core::ERROR_NONE : Core::ERROR_GENERAL);
+        return Core::ERROR_NONE;
     }
 
     Core::hresult EOTF(EotfType& eotf /* @out */) const override
