@@ -58,7 +58,8 @@ target_link_libraries(${MODULE_NAME}
     PRIVATE
         CompileSettingsDebug::CompileSettingsDebug
         ${NAMESPACE}Plugins::${NAMESPACE}Plugins
-        ${NAMESPACE}Definitions::${NAMESPACE}Definitions)
+        ${NAMESPACE}Definitions::${NAMESPACE}Definitions
+        ${NAMESPACE}::${NAMESPACE}Helpers)
 
 if (PLUGIN_DISPLAYINFO_BCM_VERSION_MAJOR)
     target_compile_definitions(${MODULE_NAME}
@@ -70,19 +71,20 @@ if (USE_DEVICESETTINGS)
     find_package(DS)
     find_package(IARMBus)
     target_include_directories(${MODULE_NAME} PRIVATE ${IARMBUS_INCLUDE_DIRS}
-        ${DS_INCLUDE_DIRS}
-        ../helpers)
+        ${DS_INCLUDE_DIRS})
 if (RDK_SERVICES_L1_TEST OR DRDK_SERVICES_L2_TEST)
     target_link_libraries(${MODULE_NAME} PRIVATE
         ${NAMESPACE}Plugins::${NAMESPACE}Plugins
         ${IARMBUS_LIBRARIES}
-        ${DS_LIBRARIES})
+        ${DS_LIBRARIES}
+        ${NAMESPACE}::${NAMESPACE}Helpers)
 else()   
     target_link_libraries(${MODULE_NAME} PRIVATE
         ${NAMESPACE}Plugins::${NAMESPACE}Plugins
         ${IARMBUS_LIBRARIES}
         ${DS_LIBRARIES}
-        displayinfo-soc)
+        displayinfo-soc
+        ${NAMESPACE}::${NAMESPACE}Helpers)
 endif()
 
     target_sources(${MODULE_NAME}
