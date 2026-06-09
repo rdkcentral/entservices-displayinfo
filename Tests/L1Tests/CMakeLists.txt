@@ -32,7 +32,7 @@ set (TEST_LIB
     ${NAMESPACE}Plugins::${NAMESPACE}Plugins
 )
 
-set (TEST_INC ../../helpers)
+set (TEST_INC)
 
 #########################################################################################
 # add_plugin_test_ex: Macro to add plugin tests, it will append to TEST_SRC, TEST_INC,
@@ -112,7 +112,7 @@ endmacro()
 #add_plugin_test_ex(PLUGIN_DEVICEINFO "${DEVICEINFO_SRC}" "${DEVICEINFO_INC}" "${NAMESPACE}DeviceInfo")
 
 # PLUGIN_DISPLAYINFO
-set (DISPLAYINFO_INC ../../plugin ../../helpers)
+set (DISPLAYINFO_INC ../../plugin ${CMAKE_SOURCE_DIR}/../entservices-helpers/helpers)
 set (DISPLAYINFO_SRC tests/test_DisplayInfo.cpp)
 add_plugin_test_ex(PLUGIN_DISPLAYINFO "${DISPLAYINFO_SRC}" "${DISPLAYINFO_INC}" "${NAMESPACE}DisplayInfo")
 
