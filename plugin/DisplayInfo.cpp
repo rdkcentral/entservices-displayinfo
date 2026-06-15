@@ -137,8 +137,6 @@ namespace Plugin {
 
             // Stop processing:
             RPC::IRemoteConnection* connection = service->RemoteConnection(_connectionId);
-             //Added for Crash
-            _connectionProperties = nullptr;
             VARIABLE_IS_NOT_USED uint32_t result = _connectionProperties->Release();
             _connectionProperties = nullptr;
 
