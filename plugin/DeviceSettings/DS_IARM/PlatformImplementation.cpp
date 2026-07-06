@@ -16,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "../Module.h"
-#include "../DisplayInfoTracing.h"
-#include "SoC_abstraction.h"
+#include "../../Module.h"
+#include "../../DisplayInfoTracing.h"
+#include "../SoC_abstraction.h"
 
 #include <interfaces/IDisplayInfo.h>
 

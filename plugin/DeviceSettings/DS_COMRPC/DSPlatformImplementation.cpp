@@ -43,15 +43,15 @@
 #error "DSPlatformImplementation.cpp must only be compiled with USE_DEVICESETTING_PLUGIN defined"
 #endif
 
-#include "../Module.h"
-#include "../DisplayInfoTracing.h"
-#include "SoC_abstraction.h"
+#include "../../Module.h"
+#include "../../DisplayInfoTracing.h"
+#include "../SoC_abstraction.h"
 
 #include <interfaces/IDisplayInfo.h>
 #include <interfaces/IConfiguration.h>
-#include "DeviceSettingsInterface.h"   // DeviceSettingsClientHelper + all DS sub-interface headers
-#include "DeviceSettingsConfig.h"      // VideoPortConfigStore, LoadVideoPortConfig, VideoPortEntry
-#include "edid-parser.hpp"             // EDID_Verify, EDID_Parse, edid_data_t, colorimetry_info
+#include "DeviceSettingsClientHelper.h"              // DeviceSettingsClientHelper + config stores + VP/Audio/VideoDevice sub-interfaces
+#include <interfaces/IDeviceSettingsDisplay.h>     // Exchange::IDeviceSettingsDisplay (GetDisplay, GetDisplayEdidBytes)
+#include "edid-parser.hpp"                         // edid_parser::COLORIMETRY_INFO_* constants
 
 #include "UtilsLogging.h"
 
@@ -172,11 +172,14 @@ public:
     {
         LOGINFO("DisplayInfo: DeviceSettings activated — loading config and caching handles");
 
-        // ---- 1. Video port config + default port handle + resolution notifications ----
+        // ---- 1. Video port config (1-arg convenience wrapper — no raw pointer needed) ----
+        if (!LoadVideoPortConfig(_videoPortConfig)) {
+            LOGERR("OnDeviceSettingsActivated: failed to load video port config");
+        }
+
+        // ---- 2. Default port handle + resolution notifications ----
         auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp != nullptr) {
-            LoadVideoPortConfig(vp, _videoPortConfig);
-
             VideoPortEntry defaultEntry;
             if (_videoPortConfig.ResolveByName(_videoPortConfig.GetDefaultVideoPortName(), defaultEntry)) {
                 Core::hresult rc = vp->GetVideoPort(defaultEntry.type, defaultEntry.index, _videoPortHandle);
@@ -199,7 +202,7 @@ public:
             LOGERR("OnDeviceSettingsActivated: IDeviceSettingsVideoPort not available");
         }
 
-        // ---- 2. Display handle for the default port ----
+        // ---- 3. Display handle for the default port ----
         if (_videoPortHandle != -1) {
             auto* disp = AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
             if (disp != nullptr) {
@@ -221,7 +224,7 @@ public:
             }
         }
 
-        // ---- 3. Video device handle (index 0) ----
+        // ---- 4. Video device handle (index 0) ----
         auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
         if (vd != nullptr) {
             Core::hresult rc = vd->GetVideoDeviceHandle(0, _videoDeviceHandle);
@@ -357,22 +360,13 @@ public:
     {
         value = 0;
         std::vector<uint8_t> edidVec;
-        uint32_t ret = GetEdidBytes(edidVec);
-        if (ret == Core::ERROR_NONE) {
-            uint32_t edidLen = static_cast<uint32_t>(edidVec.size());
-            unsigned char* edidbytes = new unsigned char[edidLen];
-            std::copy(edidVec.begin(), edidVec.end(), edidbytes);
-            if (edid_parser::EDID_Verify(edidbytes, edidLen) == edid_parser::EDID_STATUS_OK) {
-                edid_parser::edid_data_t data_ptr;
-                edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
-                value = data_ptr.res.width;
-                LOGINFO("Width from EDID = %d", value);
-            } else {
-                LOGERR("EDID Verification failed");
-            }
-            delete[] edidbytes;
+        if (GetEdidBytes(edidVec) == Core::ERROR_NONE && edidVec.size() > 62) {
+            // EDID preferred detailed timing: bytes 54–71
+            // Byte 56: H active [7:0]   Byte 58 [7:4]: H active [11:8]
+            value = ((static_cast<uint32_t>(edidVec[58]) >> 4) << 8) | edidVec[56];
+            LOGINFO("Width from EDID = %u", value);
         } else {
-            LOGERR("HDMI not connected");
+            LOGERR("Width: EDID not available or too short");
         }
         return Core::ERROR_NONE;
     }
@@ -381,50 +375,46 @@ public:
     {
         value = 0;
         std::vector<uint8_t> edidVec;
-        uint32_t ret = GetEdidBytes(edidVec);
-        if (ret == Core::ERROR_NONE) {
-            uint32_t edidLen = static_cast<uint32_t>(edidVec.size());
-            unsigned char* edidbytes = new unsigned char[edidLen];
-            std::copy(edidVec.begin(), edidVec.end(), edidbytes);
-            if (edid_parser::EDID_Verify(edidbytes, edidLen) == edid_parser::EDID_STATUS_OK) {
-                edid_parser::edid_data_t data_ptr;
-                edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
-                value = data_ptr.res.height;
-                LOGINFO("Height from EDID = %d", value);
-            } else {
-                LOGERR("EDID Verification failed");
-            }
-            delete[] edidbytes;
+        if (GetEdidBytes(edidVec) == Core::ERROR_NONE && edidVec.size() > 62) {
+            // EDID preferred detailed timing: bytes 54–71
+            // Byte 59: V active [7:0]   Byte 61 [7:4]: V active [11:8]
+            value = ((static_cast<uint32_t>(edidVec[61]) >> 4) << 8) | edidVec[59];
+            LOGINFO("Height from EDID = %u", value);
         } else {
-            LOGERR("HDMI not connected");
+            LOGERR("Height: EDID not available or too short");
         }
         return Core::ERROR_NONE;
     }
 
     Core::hresult VerticalFreq(uint32_t& value) const override
     {
-        uint32_t ret = Core::ERROR_NONE;
+        value = 0;
         std::vector<uint8_t> edidVec;
-        ret = GetEdidBytes(edidVec);
-        if (ret == Core::ERROR_NONE) {
-            uint32_t edidLen = static_cast<uint32_t>(edidVec.size());
-            unsigned char* edidbytes = new unsigned char[edidLen];
-            std::copy(edidVec.begin(), edidVec.end(), edidbytes);
-            if (edid_parser::EDID_Verify(edidbytes, edidLen) == edid_parser::EDID_STATUS_OK) {
-                edid_parser::edid_data_t data_ptr;
-                edid_parser::EDID_Parse(edidbytes, edidLen, &data_ptr);
-                value = data_ptr.res.refresh;
-                TRACE(Trace::Information, (_T("Vertical frequency = %d"), value));
-            } else {
-                LOGERR("EDID Verification failed");
-                ret = Core::ERROR_GENERAL;
-            }
-            delete[] edidbytes;
-        } else {
-            LOGERR("HDMI not connected");
-            ret = Core::ERROR_GENERAL;
+        if (GetEdidBytes(edidVec) != Core::ERROR_NONE || edidVec.size() <= 62) {
+            LOGERR("VerticalFreq: EDID not available or too short");
+            return Core::ERROR_GENERAL;
         }
-        return ret;
+        // EDID preferred detailed timing: bytes 54–71
+        // Pixel clock: bytes 54–55 (units of 10 kHz, little-endian)
+        // H active [11:8]=byte58[7:4], H active [7:0]=byte56
+        // H blanking [11:8]=byte58[3:0], H blanking [7:0]=byte57
+        // V active [11:8]=byte61[7:4], V active [7:0]=byte59
+        // V blanking [11:8]=byte61[3:0], V blanking [7:0]=byte60
+        uint32_t pixelClock = (static_cast<uint32_t>(edidVec[55]) << 8 | edidVec[54]) * 10000u;
+        uint32_t hActive    = ((static_cast<uint32_t>(edidVec[58]) >> 4) << 8) | edidVec[56];
+        uint32_t hBlanking  = ((static_cast<uint32_t>(edidVec[58]) & 0x0F) << 8) | edidVec[57];
+        uint32_t vActive    = ((static_cast<uint32_t>(edidVec[61]) >> 4) << 8) | edidVec[59];
+        uint32_t vBlanking  = ((static_cast<uint32_t>(edidVec[61]) & 0x0F) << 8) | edidVec[60];
+        uint32_t hTotal = hActive + hBlanking;
+        uint32_t vTotal = vActive + vBlanking;
+        if (hTotal > 0 && vTotal > 0 && pixelClock > 0) {
+            value = pixelClock / (hTotal * vTotal);
+            TRACE(Trace::Information, (_T("Vertical frequency = %u"), value));
+        } else {
+            LOGERR("VerticalFreq: invalid timing values in EDID");
+            return Core::ERROR_GENERAL;
+        }
+        return Core::ERROR_NONE;
     }
 
     Core::hresult HDCPProtection(HDCPProtectionType& value) const override  // get
@@ -749,26 +739,18 @@ public:
 
         std::vector<uint8_t> edidVec;
         if (GetEdidBytes(edidVec) == Core::ERROR_NONE) {
-            uint32_t edidLen = static_cast<uint32_t>(edidVec.size());
-            std::vector<unsigned char> edidbytes(edidVec.begin(), edidVec.end());
-            if (edid_parser::EDID_Verify(edidbytes.data(), edidLen) == edid_parser::EDID_STATUS_OK) {
-                edid_parser::edid_data_t data_ptr;
-                edid_parser::EDID_Parse(edidbytes.data(), edidLen, &data_ptr);
-                uint32_t colorimetry_info = data_ptr.colorimetry_info;
-                LOGINFO("colorimetry = %d", colorimetry_info);
-                if (!colorimetry_info) colorimetryCaps.push_back(COLORIMETRY_UNKNOWN);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC601)    colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC709)    colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_SYCC601)     colorimetryCaps.push_back(COLORIMETRY_SYCC601);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBEYCC601) colorimetryCaps.push_back(COLORIMETRY_OPYCC601);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBERGB)    colorimetryCaps.push_back(COLORIMETRY_OPRGB);
-                if ((colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020CL) ||
-                    (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020NCL)) colorimetryCaps.push_back(COLORIMETRY_BT2020YCCBCBRC);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020RGB)   colorimetryCaps.push_back(COLORIMETRY_BT2020RGB_YCBCR);
-                if (colorimetry_info & edid_parser::COLORIMETRY_INFO_DCI_P3)      colorimetryCaps.push_back(COLORIMETRY_OTHER);
-            } else {
-                LOGERR("EDID Verification failed");
-            }
+            uint32_t colorimetry_info = ParseColorimetryFromEdid(edidVec);
+            LOGINFO("colorimetry = 0x%x", colorimetry_info);
+            if (!colorimetry_info) colorimetryCaps.push_back(COLORIMETRY_UNKNOWN);
+            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC601)    colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
+            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC709)    colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
+            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_SYCC601)     colorimetryCaps.push_back(COLORIMETRY_SYCC601);
+            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBEYCC601) colorimetryCaps.push_back(COLORIMETRY_OPYCC601);
+            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBERGB)    colorimetryCaps.push_back(COLORIMETRY_OPRGB);
+            if ((colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020CL) ||
+                (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020NCL)) colorimetryCaps.push_back(COLORIMETRY_BT2020YCCBCBRC);
+            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020RGB)   colorimetryCaps.push_back(COLORIMETRY_BT2020RGB_YCBCR);
+            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_DCI_P3)      colorimetryCaps.push_back(COLORIMETRY_OTHER);
         } else {
             LOGERR("Display not connected, returning empty colorimetry list");
         }
@@ -961,6 +943,71 @@ private:
         LOGINFO("IsDisplayAccessible: IsVideoPortDisplayConnected rc=%u connected=%s",
                 rc, connected ? "true" : "false");
         return connected;
+    }
+
+    /**
+     * Parses the CTA-861 extension block to extract colorimetry capabilities
+     * WITHOUT calling EDID_Parse (which crashes on some Sharp TV EDID data).
+     *
+     * Constant mapping (edid_parser::colorimetry_info_t, 1:1 with CTA-861 CDB byte 1):
+     *   COLORIMETRY_INFO_XVYCC601   = 0x01  (CDB byte1, bit 0)
+     *   COLORIMETRY_INFO_XVYCC709   = 0x02  (CDB byte1, bit 1)
+     *   COLORIMETRY_INFO_SYCC601    = 0x04  (CDB byte1, bit 2)
+     *   COLORIMETRY_INFO_ADOBEYCC601= 0x08  (CDB byte1, bit 3)
+     *   COLORIMETRY_INFO_ADOBERGB   = 0x10  (CDB byte1, bit 4)
+     *   COLORIMETRY_INFO_BT2020CL   = 0x20  (CDB byte1, bit 5)
+     *   COLORIMETRY_INFO_BT2020NCL  = 0x40  (CDB byte1, bit 6)
+     *   COLORIMETRY_INFO_BT2020RGB  = 0x80  (CDB byte1, bit 7)
+     *   COLORIMETRY_INFO_DCI_P3     = 0x100 (CDB byte2, bit 7 per CTA-861-H)
+     */
+    static uint32_t ParseColorimetryFromEdid(const std::vector<uint8_t>& edidVec)
+    {
+        // Need at least 132 bytes: 128-byte base + 4-byte extension header
+        if (edidVec.size() < 132) return 0;
+
+        // CTA-861 extension block must be at byte 128 (tag = 0x02)
+        if (edidVec[128] != 0x02) return 0;
+
+        // Byte 130: byte offset from start of extension block to first DTD
+        uint8_t dtdOffset = edidVec[130];
+        if (dtdOffset < 4) return 0;  // No data block collection
+
+        // Data block collection spans bytes [128+4 .. 128+dtdOffset)
+        const size_t dbcStart = 132;
+        const size_t dbcEnd   = static_cast<size_t>(128) + dtdOffset;
+        if (dbcEnd > edidVec.size()) return 0;
+
+        uint32_t colorimetry_info = 0;
+        size_t pos = dbcStart;
+        while (pos < dbcEnd) {
+            uint8_t hdr    = edidVec[pos];
+            uint8_t tag    = (hdr >> 5) & 0x07;
+            uint8_t length = hdr & 0x1F;
+
+            // Safety: don't read past end of buffer or DBC
+            if (pos + 1u + length > edidVec.size()) break;
+
+            if (tag == 7u && length >= 2u) {
+                // Extended Data Block — first byte is extended tag
+                uint8_t extTag = edidVec[pos + 1];
+                if (extTag == 5u && length >= 3u) {
+                    // Colorimetry Data Block (CTA-861 Section 7.5.5)
+                    // Byte 2 (=pos+2): colorimetry standards, bits 7:0
+                    uint8_t cdb1 = edidVec[pos + 2];
+                    colorimetry_info |= static_cast<uint32_t>(cdb1);  // bits 0x01..0x80
+                    if (length >= 4u) {
+                        // Byte 3 (=pos+3): metadata indicators
+                        // CTA-861-H: bit 7 = DCI-P3 (0x100 in our bitmask)
+                        uint8_t cdb2 = edidVec[pos + 3];
+                        if (cdb2 & 0x80u) colorimetry_info |= 0x100u;
+                    }
+                }
+            }
+
+            pos += 1u + length;
+        }
+
+        return colorimetry_info;
     }
 
     /**

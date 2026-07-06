@@ -93,7 +93,7 @@ if (USE_DEVICESETTING_PLUGIN)
 
     target_sources(${MODULE_NAME}
         PRIVATE
-            DeviceSettings/DSPlatformImplementation.cpp)
+            DeviceSettings/DS_COMRPC/DSPlatformImplementation.cpp)
 
     # displayinfo-soc is still needed for SoC_GetTotalGpuRam / SoC_GetFreeGpuRam.
     target_link_libraries(${MODULE_NAME} PRIVATE
@@ -122,7 +122,7 @@ endif()
 
     target_sources(${MODULE_NAME}
         PRIVATE
-            DeviceSettings/PlatformImplementation.cpp)
+            DeviceSettings/DS_IARM/PlatformImplementation.cpp)
     if (BUILD_RPI)
         target_sources(${MODULE_NAME}
             PRIVATE
