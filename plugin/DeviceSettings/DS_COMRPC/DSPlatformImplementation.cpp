@@ -545,7 +545,7 @@ public:
         }
 
         std::vector<VideoPortEntry> entries;
-        _vpConfigStore.BuildVideoPortEntries(entries);
+        _vpConfigStore.getVideoPortEntries(entries);
 
         auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
