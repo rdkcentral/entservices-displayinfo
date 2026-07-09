@@ -122,10 +122,6 @@ public:
     DisplayInfoImplementation()
         : _adminLock()
         , _observers()
-        , _videoPortConfig()
-        , _videoPortHandle(-1)
-        , _displayHandle(-1)
-        , _videoDeviceHandle(-1)
         , _defaultPortType(VideoPortType::DS_VIDEO_PORT_TYPE_HDMI)
         , _DSVideoPortNotification(*this)
     {
@@ -173,7 +169,7 @@ public:
         LOGINFO("DisplayInfo: DeviceSettings activated — loading config and caching handles");
 
         // ---- 1. Video port config (1-arg convenience wrapper — no raw pointer needed) ----
-        if (!LoadVideoPortConfig(_videoPortConfig)) {
+        if (!LoadVideoPortConfig(_vpConfigStore)) {
             LOGERR("OnDeviceSettingsActivated: failed to load video port config");
         }
 
@@ -181,15 +177,15 @@ public:
         auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp != nullptr) {
             VideoPortEntry defaultEntry;
-            if (_videoPortConfig.ResolveByName(_videoPortConfig.GetDefaultVideoPortName(), defaultEntry)) {
-                Core::hresult rc = vp->GetVideoPort(defaultEntry.type, defaultEntry.index, _videoPortHandle);
+            if (_vpConfigStore.ResolveByName(_vpConfigStore.GetDefaultVideoPortName(), defaultEntry)) {
+                Core::hresult rc = vp->GetVideoPort(defaultEntry.type, defaultEntry.index, _videoPortHandles[_vpConfigStore.GetDefaultVideoPortName()]);
                 if (rc != Core::ERROR_NONE) {
                     LOGERR("OnDeviceSettingsActivated: GetVideoPort failed: %u", rc);
-                    _videoPortHandle = -1;
+                    _videoPortHandles[_vpConfigStore.GetDefaultVideoPortName()] = INVALID_DS_HANDLE;
                 } else {
                     _defaultPortType = defaultEntry.type;
                     LOGINFO("Cached default video port handle: %d (port=%s, type=%d)",
-                            _videoPortHandle, _videoPortConfig.GetDefaultVideoPortName().c_str(),
+                            getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), _vpConfigStore.GetDefaultVideoPortName().c_str(),
                             static_cast<int>(_defaultPortType));
                 }
             } else {
@@ -203,19 +199,19 @@ public:
         }
 
         // ---- 3. Display handle for the default port ----
-        if (_videoPortHandle != -1) {
+        if (getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()) != INVALID_DS_HANDLE) {
             auto* disp = AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
             if (disp != nullptr) {
                 VideoPortEntry defaultEntry;
-                if (_videoPortConfig.ResolveByName(_videoPortConfig.GetDefaultVideoPortName(), defaultEntry)) {
+                if (_vpConfigStore.ResolveByName(_vpConfigStore.GetDefaultVideoPortName(), defaultEntry)) {
                     Exchange::IDeviceSettingsDisplay::DisplayPortType dpType =
                         static_cast<Exchange::IDeviceSettingsDisplay::DisplayPortType>(defaultEntry.type);
-                    Core::hresult rc = disp->GetDisplay(dpType, defaultEntry.index, _displayHandle);
+                    Core::hresult rc = disp->GetDisplay(dpType, defaultEntry.index, _displayHandles[_vpConfigStore.GetDefaultVideoPortName()]);
                     if (rc != Core::ERROR_NONE) {
                         LOGERR("OnDeviceSettingsActivated: GetDisplay failed: %u", rc);
-                        _displayHandle = -1;
+                        _displayHandles[_vpConfigStore.GetDefaultVideoPortName()] = INVALID_DS_HANDLE;
                     } else {
-                        LOGINFO("Cached display handle: %d", _displayHandle);
+                        LOGINFO("Cached display handle: %d", getCachedDisplayHandle(_vpConfigStore.GetDefaultVideoPortName()));
                     }
                 }
                 disp->Release();
@@ -230,7 +226,7 @@ public:
             Core::hresult rc = vd->GetVideoDeviceHandle(0, _videoDeviceHandle);
             if (rc != Core::ERROR_NONE) {
                 LOGERR("OnDeviceSettingsActivated: GetVideoDeviceHandle failed: %u", rc);
-                _videoDeviceHandle = -1;
+                _videoDeviceHandle = INVALID_DS_HANDLE;
             } else {
                 LOGINFO("Cached video device handle: %d", _videoDeviceHandle);
             }
@@ -247,10 +243,10 @@ public:
     void OnDeviceSettingsDeactivated() override
     {
         LOGINFO("DisplayInfo: DeviceSettings deactivated — clearing cached handles");
-        _videoPortConfig.Clear();
-        _videoPortHandle   = -1;
-        _displayHandle     = -1;
-        _videoDeviceHandle = -1;
+        _vpConfigStore.Clear();
+        _videoPortHandles.clear();
+        _displayHandles.clear();
+        _videoDeviceHandle = INVALID_DS_HANDLE;
     }
 
     // -------------------------------------------------------------------------
@@ -303,15 +299,15 @@ public:
     Core::hresult IsAudioPassthrough(bool& value) const override
     {
         value = false;
-        if (_videoPortConfig.IsEmpty()) {
+        if (_vpConfigStore.IsEmpty()) {
             LOGERR("IsAudioPassthrough: config not available");
             return Core::ERROR_UNAVAILABLE;
         }
 
         int32_t connectedAudioType  = -1;
         int32_t connectedAudioIndex = -1;
-        if (!_videoPortConfig.GetConnectedAudioPort(
-                _videoPortConfig.GetDefaultVideoPortName(),
+        if (!_vpConfigStore.GetConnectedAudioPort(
+                _vpConfigStore.GetDefaultVideoPortName(),
                 connectedAudioType, connectedAudioIndex)) {
             LOGERR("IsAudioPassthrough: connected audio port not found in config");
             return Core::ERROR_NOT_EXIST;
@@ -323,7 +319,7 @@ public:
             return Core::ERROR_UNAVAILABLE;
         }
 
-        int32_t audioHandle = -1;
+        int32_t audioHandle = INVALID_DS_HANDLE;
         Exchange::IDeviceSettingsAudio::AudioPortType audioPortType =
             static_cast<Exchange::IDeviceSettingsAudio::AudioPortType>(connectedAudioType);
         Core::hresult rc = audio->GetAudioPort(audioPortType, connectedAudioIndex, audioHandle);
@@ -342,7 +338,7 @@ public:
     Core::hresult Connected(bool& connected) const override
     {
         connected = false;
-        if (_videoPortHandle == -1) {
+        if (getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()) == INVALID_DS_HANDLE) {
             LOGERR("Connected: video port handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
@@ -351,7 +347,7 @@ public:
             LOGERR("Connected: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
         }
-        Core::hresult rc = vp->IsVideoPortDisplayConnected(_videoPortHandle, connected);
+        Core::hresult rc = vp->IsVideoPortDisplayConnected(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), connected);
         vp->Release();
         return rc;
     }
@@ -420,7 +416,7 @@ public:
     Core::hresult HDCPProtection(HDCPProtectionType& value) const override  // get
     {
         value = IConnectionProperties::HDCPProtectionType::HDCP_AUTO;
-        if (_videoPortHandle == -1) {
+        if (getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()) == INVALID_DS_HANDLE) {
             LOGERR("HDCPProtection(get): video port handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
@@ -431,7 +427,7 @@ public:
         }
         Exchange::IDeviceSettingsVideoPort::HDCPProtocolVersion version =
             Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_MAX;
-        Core::hresult rc = vp->GetHDMIPreference(_videoPortHandle, version);
+        Core::hresult rc = vp->GetHDMIPreference(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), version);
         vp->Release();
         if (rc == Core::ERROR_NONE) {
             switch (version) {
@@ -448,7 +444,7 @@ public:
 
     Core::hresult HDCPProtection(const HDCPProtectionType value) override  // set
     {
-        if (_videoPortHandle == -1) {
+        if (getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()) == INVALID_DS_HANDLE) {
             LOGERR("HDCPProtection(set): video port handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
@@ -467,7 +463,7 @@ public:
         default:
             break;
         }
-        Core::hresult rc = vp->SetHDMIPreference(_videoPortHandle, version);
+        Core::hresult rc = vp->SetHDMIPreference(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), version);
         vp->Release();
         return rc;
     }
@@ -555,13 +551,13 @@ public:
     Core::hresult PortName(string& name /* @out */) const override
     {
         name.clear();
-        if (_videoPortConfig.IsEmpty()) {
+        if (_vpConfigStore.IsEmpty()) {
             LOGERR("PortName: video port config not available");
             return Core::ERROR_UNAVAILABLE;
         }
 
         std::vector<VideoPortEntry> entries;
-        _videoPortConfig.BuildVideoPortEntries(entries);
+        _vpConfigStore.BuildVideoPortEntries(entries);
 
         auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
@@ -574,7 +570,7 @@ public:
                 entry.type != VideoPortType::DS_VIDEO_PORT_TYPE_INTERNAL) {
                 continue;
             }
-            int32_t handle = -1;
+            int32_t handle = INVALID_DS_HANDLE;
             if (vp->GetVideoPort(entry.type, entry.index, handle) != Core::ERROR_NONE) {
                 continue;
             }
@@ -613,7 +609,7 @@ public:
 
         Exchange::IDeviceSettingsVideoPort::DisplayColorSpace _cs =
             Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_COLORSPACE_UNKNOWN;
-        Core::hresult rc = vp->GetColorSpace(_videoPortHandle, _cs);
+        Core::hresult rc = vp->GetColorSpace(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), _cs);
         vp->Release();
 
         if (rc == Core::ERROR_NONE) {
@@ -639,7 +635,7 @@ public:
     Core::hresult FrameRate(FrameRateType& rate /* @out */) const override
     {
         rate = FRAMERATE_UNKNOWN;
-        if (_videoPortHandle == -1) {
+        if (getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()) == INVALID_DS_HANDLE) {
             LOGERR("FrameRate: video port handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
@@ -649,7 +645,7 @@ public:
             return Core::ERROR_UNAVAILABLE;
         }
         Exchange::IDeviceSettingsVideoPort::VideoPortResolution resolution;
-        Core::hresult rc = vp->GetVideoPortResolution(_videoPortHandle, resolution);
+        Core::hresult rc = vp->GetVideoPortResolution(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), resolution);
         vp->Release();
 
         if (rc == Core::ERROR_NONE) {
@@ -682,7 +678,7 @@ public:
         }
 
         uint32_t colorDepth = 0;
-        Core::hresult rc = vp->GetColorDepth(_videoPortHandle, colorDepth);
+        Core::hresult rc = vp->GetColorDepth(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), colorDepth);
         vp->Release();
 
         if (rc == Core::ERROR_NONE) {
@@ -716,7 +712,7 @@ public:
 
         Exchange::IDeviceSettingsVideoPort::DisplayQuantizationRange _qr =
             Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_QUANTIZATIONRANGE_UNKNOWN;
-        Core::hresult rc = vp->GetQuantizationRange(_videoPortHandle, _qr);
+        Core::hresult rc = vp->GetQuantizationRange(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), _qr);
         vp->Release();
 
         if (rc == Core::ERROR_NONE) {
@@ -774,7 +770,7 @@ public:
 
         Exchange::IDeviceSettingsVideoPort::HDRStandard hdrStandard =
             Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_NONE;
-        Core::hresult rc = vp->GetVideoEOTF(_videoPortHandle, hdrStandard);
+        Core::hresult rc = vp->GetVideoEOTF(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), hdrStandard);
         vp->Release();
 
         if (rc == Core::ERROR_NONE) {
@@ -809,7 +805,7 @@ public:
         if (IsDisplayAccessible()) {
             auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
             if (vp != nullptr) {
-                vp->GetTVHDRCapabilities(_videoPortHandle, capabilities);
+                vp->GetTVHDRCapabilities(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), capabilities);
                 vp->Release();
             }
         }
@@ -844,7 +840,7 @@ public:
         std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
         int32_t capabilities = 0;
 
-        if (_videoDeviceHandle != -1) {
+        if (_videoDeviceHandle != INVALID_DS_HANDLE) {
             auto* vd = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoDevice>();
             if (vd != nullptr) {
                 vd->GetHDRCapabilities(_videoDeviceHandle, capabilities);
@@ -883,7 +879,7 @@ public:
         if (IsDisplayAccessible()) {
             auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
             if (vp != nullptr) {
-                vp->IsVideoPortOutputHDR(_videoPortHandle, isHdr);
+                vp->IsVideoPortOutputHDR(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), isHdr);
                 vp->Release();
             }
         }
@@ -923,12 +919,12 @@ private:
      */
     bool IsDisplayAccessible() const
     {
-        if (_videoPortHandle == -1) {
-            LOGERR("IsDisplayAccessible: video port handle not available (%d)", _videoPortHandle);
+        if (getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()) == INVALID_DS_HANDLE) {
+            LOGERR("IsDisplayAccessible: video port handle not available (%d)", getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()));
             return false;
         }
         LOGINFO("IsDisplayAccessible: portHandle=%d portType=%d",
-                _videoPortHandle, static_cast<int>(_defaultPortType));
+                getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), static_cast<int>(_defaultPortType));
         if (_defaultPortType == VideoPortType::DS_VIDEO_PORT_TYPE_INTERNAL) {
             return true;
         }
@@ -938,7 +934,7 @@ private:
             LOGERR("IsDisplayAccessible: IDeviceSettingsVideoPort not available");
             return false;
         }
-        Core::hresult rc = vp->IsVideoPortDisplayConnected(_videoPortHandle, connected);
+        Core::hresult rc = vp->IsVideoPortDisplayConnected(getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), connected);
         vp->Release();
         LOGINFO("IsDisplayAccessible: IsVideoPortDisplayConnected rc=%u connected=%s",
                 rc, connected ? "true" : "false");
@@ -1019,7 +1015,7 @@ private:
      */
     uint32_t GetEdidBytes(std::vector<uint8_t>& edidVec) const
     {
-        if (_displayHandle == -1) {
+        if (getCachedDisplayHandle(_vpConfigStore.GetDefaultVideoPortName()) == INVALID_DS_HANDLE) {
             LOGERR("GetEdidBytes: display handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
@@ -1031,7 +1027,7 @@ private:
 
         static const uint16_t kEdidBufLen = 256;
         edidVec.assign(kEdidBufLen, 0);
-        Core::hresult rc = disp->GetDisplayEdidBytes(_displayHandle, edidVec.data(), kEdidBufLen);
+        Core::hresult rc = disp->GetDisplayEdidBytes(getCachedDisplayHandle(_vpConfigStore.GetDefaultVideoPortName()), edidVec.data(), kEdidBufLen);
         disp->Release();
 
         if (rc == Core::ERROR_NONE) {
@@ -1060,10 +1056,6 @@ private:
 
     mutable Core::CriticalSection                    _adminLock;
     std::list<IConnectionProperties::INotification*> _observers;
-    VideoPortConfigStore                              _videoPortConfig;
-    int32_t                                          _videoPortHandle;
-    int32_t                                          _displayHandle;
-    int32_t                                          _videoDeviceHandle;
     VideoPortType                                    _defaultPortType;
     Core::Sink<DSVideoPortNotification>              _DSVideoPortNotification;
 
