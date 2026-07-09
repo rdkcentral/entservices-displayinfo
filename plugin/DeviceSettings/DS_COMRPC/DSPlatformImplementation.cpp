@@ -173,21 +173,21 @@ public:
             LOGERR("OnDeviceSettingsActivated: failed to load video port config");
         }
 
-        // ---- 2. Default port handle + resolution notifications ----
+        // ---- 1b. Audio config — needed for IsAudioPassthrough() ----
+        if (!LoadAudioConfig(_audioConfigStore)) {
+            LOGWARN("OnDeviceSettingsActivated: failed to load audio config (IsAudioPassthrough may fail)");
+        }
+
+        // ---- 2. Default port type + resolution notifications ----
+        // _videoPortHandles are now auto-populated by LoadVideoPortConfig() above
         auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp != nullptr) {
             VideoPortEntry defaultEntry;
             if (_vpConfigStore.ResolveByName(_vpConfigStore.GetDefaultVideoPortName(), defaultEntry)) {
-                Core::hresult rc = vp->GetVideoPort(defaultEntry.type, defaultEntry.index, _videoPortHandles[_vpConfigStore.GetDefaultVideoPortName()]);
-                if (rc != Core::ERROR_NONE) {
-                    LOGERR("OnDeviceSettingsActivated: GetVideoPort failed: %u", rc);
-                    _videoPortHandles[_vpConfigStore.GetDefaultVideoPortName()] = INVALID_DS_HANDLE;
-                } else {
-                    _defaultPortType = defaultEntry.type;
-                    LOGINFO("Cached default video port handle: %d (port=%s, type=%d)",
-                            getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), _vpConfigStore.GetDefaultVideoPortName().c_str(),
-                            static_cast<int>(_defaultPortType));
-                }
+                _defaultPortType = defaultEntry.type;
+                LOGINFO("Cached default video port handle: %d (port=%s, type=%d)",
+                        getCachedVideoPortHandle(_vpConfigStore.GetDefaultVideoPortName()), _vpConfigStore.GetDefaultVideoPortName().c_str(),
+                        static_cast<int>(_defaultPortType));
             } else {
                 LOGERR("OnDeviceSettingsActivated: failed to resolve default video port entry");
             }
@@ -220,20 +220,9 @@ public:
             }
         }
 
-        // ---- 4. Video device handle (index 0) ----
-        auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
-        if (vd != nullptr) {
-            Core::hresult rc = vd->GetVideoDeviceHandle(0, _videoDeviceHandle);
-            if (rc != Core::ERROR_NONE) {
-                LOGERR("OnDeviceSettingsActivated: GetVideoDeviceHandle failed: %u", rc);
-                _videoDeviceHandle = INVALID_DS_HANDLE;
-            } else {
-                LOGINFO("Cached video device handle: %d", _videoDeviceHandle);
-            }
-            vd->Release();
-        } else {
-            LOGERR("OnDeviceSettingsActivated: IDeviceSettingsVideoDevice not available");
-        }
+        // ---- 4. Video device handle (index 0) — auto-populated by LoadVideoDeviceConfig ----
+        LoadVideoDeviceConfig(_vdConfigStore);
+        LOGINFO("Cached video device handle: %d", getCachedVideoDeviceHandle(0));
     }
 
     /**
@@ -242,11 +231,11 @@ public:
      */
     void OnDeviceSettingsDeactivated() override
     {
-        LOGINFO("DisplayInfo: DeviceSettings deactivated — clearing cached handles");
+        LOGINFO("DisplayInfo: DeviceSettings deactivated — clearing config stores");
         _vpConfigStore.Clear();
-        _videoPortHandles.clear();
-        _displayHandles.clear();
-        _videoDeviceHandle = INVALID_DS_HANDLE;
+        _vdConfigStore.Clear();
+        _audioConfigStore.Clear();
+        // _videoPortHandles, _displayHandles, _videoDeviceHandles cleared by base class
     }
 
     // -------------------------------------------------------------------------
@@ -299,19 +288,12 @@ public:
     Core::hresult IsAudioPassthrough(bool& value) const override
     {
         value = false;
-        if (_vpConfigStore.IsEmpty()) {
-            LOGERR("IsAudioPassthrough: config not available");
+        if (_audioConfigStore.IsEmpty()) {
+            LOGERR("IsAudioPassthrough: audio config not available");
             return Core::ERROR_UNAVAILABLE;
         }
 
-        int32_t connectedAudioType  = -1;
-        int32_t connectedAudioIndex = -1;
-        if (!_vpConfigStore.GetConnectedAudioPort(
-                _vpConfigStore.GetDefaultVideoPortName(),
-                connectedAudioType, connectedAudioIndex)) {
-            LOGERR("IsAudioPassthrough: connected audio port not found in config");
-            return Core::ERROR_NOT_EXIST;
-        }
+        const std::string audioPortName = _audioConfigStore.GetDefaultAudioPortName();
 
         auto* audio = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsAudio>();
         if (audio == nullptr) {
@@ -319,17 +301,23 @@ public:
             return Core::ERROR_UNAVAILABLE;
         }
 
+        // isAudioOutputPortConnected() fills audioHandle from the cache AND
+        // verifies the port is physically connected (HDMI: display present,
+        // ARC: HDMI-In status, HEADPHONE: IsAudioOutputConnected, others: always true).
         int32_t audioHandle = INVALID_DS_HANDLE;
-        Exchange::IDeviceSettingsAudio::AudioPortType audioPortType =
-            static_cast<Exchange::IDeviceSettingsAudio::AudioPortType>(connectedAudioType);
-        Core::hresult rc = audio->GetAudioPort(audioPortType, connectedAudioIndex, audioHandle);
+        if (!const_cast<DisplayInfoImplementation*>(this)->isAudioOutputPortConnected(
+                audio, audioPortName, audioHandle)) {
+            LOGWARN("IsAudioPassthrough: audio port '%s' not connected — passthrough false",
+                    audioPortName.c_str());
+            audio->Release();
+            return Core::ERROR_NONE;  // not connected: passthrough is implicitly false
+        }
+
+        Exchange::IDeviceSettingsAudio::StereoMode mode =
+            Exchange::IDeviceSettingsAudio::AUDIO_STEREO_UNKNOWN;
+        Core::hresult rc = audio->GetStereoMode(audioHandle, mode);
         if (rc == Core::ERROR_NONE) {
-            Exchange::IDeviceSettingsAudio::StereoMode mode =
-                Exchange::IDeviceSettingsAudio::AUDIO_STEREO_UNKNOWN;
-            rc = audio->GetStereoMode(audioHandle, mode);
-            if (rc == Core::ERROR_NONE) {
-                value = (mode == Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH);
-            }
+            value = (mode == Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH);
         }
         audio->Release();
         return rc;
@@ -840,10 +828,10 @@ public:
         std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
         int32_t capabilities = 0;
 
-        if (_videoDeviceHandle != INVALID_DS_HANDLE) {
+        if (getCachedVideoDeviceHandle(0) != INVALID_DS_HANDLE) {
             auto* vd = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoDevice>();
             if (vd != nullptr) {
-                vd->GetHDRCapabilities(_videoDeviceHandle, capabilities);
+                vd->GetHDRCapabilities(getCachedVideoDeviceHandle(0), capabilities);
                 vd->Release();
             }
         }
