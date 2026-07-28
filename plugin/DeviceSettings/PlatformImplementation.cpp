@@ -508,6 +508,8 @@ public:
     Core::hresult ColorSpace(ColourSpaceType& cs /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
+        
+        cs = FORMAT_UNKNOWN;
         try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
@@ -536,7 +538,6 @@ public:
             else
             {
                 LOGERR("HDMI not connected!");
-                ret = Core::ERROR_GENERAL;
             }
         }
         catch (const device::Exception& err)
@@ -589,6 +590,8 @@ public:
     Core::hresult ColourDepth(ColourDepthType& colour /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
+        colour = COLORDEPTH_UNKNOWN;
+        
         try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
@@ -613,8 +616,7 @@ public:
             else
             {
                 LOGERR("HDMI not connected!");
-                ret = Core::ERROR_GENERAL;
-            }
+             }
         }
         catch (const device::Exception& err)
         {
@@ -627,6 +629,8 @@ public:
     Core::hresult QuantizationRange(QuantizationRangeType& qr /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
+        qr = QUANTIZATIONRANGE_UNKNOWN;
+        
         try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
@@ -649,8 +653,7 @@ public:
             else
             {
                 LOGERR("HDMI not connected!");
-                ret = Core::ERROR_GENERAL;
-            }
+             }
         }
         catch (const device::Exception& err)
         {
@@ -745,6 +748,55 @@ public:
             ret = Core::ERROR_GENERAL;
         }
         return ret;
+    }
+
+    Core::hresult GetCurrentColorimetry(ColorimetryTypeInfo& info /* @out */) const override
+    {
+        info.colorimetry = COLORIMETRY_UNKNOWN;
+        try
+        {
+            device::List<device::VideoOutputPort> vPorts = device::Host::getInstance().getVideoOutputPorts();
+            for (size_t i = 0; i < vPorts.size(); i++)
+            {
+                device::VideoOutputPort& vPort = vPorts.at(i);
+                if (vPort.isDisplayConnected())
+                {
+                    int matCoeff = vPort.getMatrixCoefficients();
+                    LOGINFO("GetCurrentColorimetry: port=%s matrixCoefficients=%d",
+                          vPort.getName().c_str(), matCoeff);
+                    switch (static_cast<dsDisplayMatrixCoefficients_t>(matCoeff))
+                    {
+                        case dsDISPLAY_MATRIXCOEFFICIENT_BT_709:
+                            info.colorimetry = COLORIMETRY_BT709; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M:
+                            info.colorimetry = COLORIMETRY_SMPTE170M; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709:
+                            info.colorimetry = COLORIMETRY_XVYCC709; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601:
+                            info.colorimetry = COLORIMETRY_XVYCC601; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL:
+                            info.colorimetry = COLORIMETRY_BT2020RGB_YCBCR; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL:
+                            info.colorimetry = COLORIMETRY_BT2020YCCBCBRC; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN:
+                            info.colorimetry = COLORIMETRY_UNKNOWN; break;
+                        default:
+                            info.colorimetry = COLORIMETRY_OTHER; break;
+                    }
+                    break; // use the first active connected port
+                }
+            }
+            if (info.colorimetry == COLORIMETRY_UNKNOWN)
+            {
+                LOGERR("No active display connected, returning COLORIMETRY_UNKNOWN");
+            }
+        }
+        catch (const device::Exception& err)
+        {
+            LOGERR("DeviceSettings exception in GetCurrentColorimetry: %d, %s", err.getCode(), err.what());
+            info.colorimetry = COLORIMETRY_UNKNOWN;
+        }
+        return Core::ERROR_NONE;
     }
 
     // @property

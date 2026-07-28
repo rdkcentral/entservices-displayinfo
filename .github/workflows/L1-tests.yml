@@ -200,7 +200,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-apis
           path: entservices-apis
-          ref: ${{env.INTERFACES_REF}}
+          ref: feature/RDKEMW-22037_2
           run: rm -rf $GITHUB_WORKSPACE/entservices-apis/jsonrpc/DTV.json
 
       - name: Apply patches entservices-apis
@@ -384,6 +384,7 @@ jobs:
           -I$GITHUB_WORKSPACE/install/usr/include
           -I ./usr/include/libdrm
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings/VideoOutputPortMock.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/RBus.h

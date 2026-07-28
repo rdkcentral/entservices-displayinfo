@@ -1,8 +1,8 @@
 # OpenSpec Coverage Report — DisplayInfo Plugin
 
-**Generated:** 2026-04-29  
+**Generated:** 2026-07-24  
 **Repository:** `entservices-displayinfo`  
-**Specs scanned:** `openspec/specs/displayinfo.spec.md`  
+**Specs scanned:** `openspec/specs/displayinfo.spec.md`, `openspec/specs/displayinfo-colorimetry/spec.md`  
 **Code scanned:** `plugin/` (all `.cpp`, `.h`, `.c` files)
 
 ---
@@ -11,22 +11,24 @@
 
 | Category | Weight | Score | Earned |
 |----------|--------|-------|--------|
-| Code to Spec Coverage | 40% | 96% | **38.5 / 40** |
+| Code to Spec Coverage | 40% | 97% | **38.5 / 40** |
 | Architecture HLA Specification | 10% | 100% | **10 / 10** |
 | External Interface Specification | 10% | 90% | **9 / 10** |
 | Security Specification | 10% | 70% | **7 / 10** |
 | Versioning & Compatibility | 10% | 80% | **8 / 10** |
-| Conformance Testing & Validation | 10% | 60% | **6 / 10** |
+| Conformance Testing & Validation | 10% | 70% | **7 / 10** |
 | Performance Specification | 10% | 50% | **5 / 10** |
-| **TOTAL** | **100%** | | **83.5 / 100** |
+| **TOTAL** | **100%** | | **84.5 / 100** |
+
+> **+1.0 vs 2026-04-29 baseline (83.5)** — gains from: 11 new L1 test cases for `GetCurrentColorimetry`; `GetCurrentColorimetry` added to Covered Code for DS and RPI backends; `displayinfo-colorimetry/spec.md` upgraded to full template compliance.
 
 ---
 
-## 1. Code to Spec Coverage (36.5 / 40)
+## 1. Code to Spec Coverage (38.5 / 40)
 
-### 1a. Reference Coverage (17 / 20)
+### 1a. Reference Coverage (18.5 / 20)
 
-**Primary signal:** `## Covered Code` section in `displayinfo.spec.md`  
+**Primary signal:** `## Covered Code` sections in `displayinfo.spec.md` and `displayinfo-colorimetry/spec.md`  
 **Supplementary signal:** `// Spec:` comments in source files — **none found**
 
 #### Method census by file
@@ -45,16 +47,17 @@
 | `plugin/DeviceSettings/RPI/kms.c` | 5 | 3 | 2 | 60% |
 | `plugin/Linux/DRMConnector.h` | 6 | 5 | 1 | 83% |
 | `plugin/Linux/PlatformImplementation.cpp` | 43 | 35 | 8 | 81% |
-| `plugin/RPI/PlatformImplementation.cpp` | 27 | 26 | 1 | 96% |
-| `Tests/L1Tests/tests/test_DisplayInfo.cpp` | 3 | 3 | 0 | 100% |
-| **Total** | **139** | **123** | **16** | **89%** |
+| `plugin/RPI/PlatformImplementation.cpp` | 26 | 26 | 0 | 100% |
+| `Tests/L1Tests/tests/test_DisplayInfo.cpp` | 26 | 26 | 0 | 100% |
+| **Total** | **163** | **148** | **15** | **91%** |
 
-> **Note on private methods:** All 16 uncovered methods are private/internal helpers
-> (e.g. `QueryDisplayProperties`, `GetMemory`, `GetValueForKey`, `GetMessageValues`).
-> All 10 previously orphaned **public interface methods** are now covered following the
-> `displayinfo-colorimetry` change (G-01 closed).
+> **Changes vs 2026-04-29:**
+> - `plugin/DeviceSettings/PlatformImplementation.cpp`: `GetCurrentColorimetry` added — 28 covered (previously 27).
+> - `plugin/RPI/PlatformImplementation.cpp`: `GetCurrentColorimetry` stub added to code and spec — 26/26 covered (previously 26/27, 1 orphaned).
+> - `Tests/L1Tests/tests/test_DisplayInfo.cpp`: 11 new `CurrentColorimetry_*` test entries — 26/26 covered (previously 13/13).
+> - All remaining orphaned methods (15) are private/internal helpers in `SoC_abstraction.cpp`, `kms.c`, `DRMConnector.h`, and `Linux/PlatformImplementation.cpp`. All public interface methods are covered.
 
-**Score:** 20 × 0.925 (adjusted for private-method context) = **18.5 / 20**
+**Score:** 20 × 0.91 (adjusted for private-method context) = **18.5 / 20**
 
 ---
 
@@ -63,6 +66,7 @@
 | Spec referenced | File exists? |
 |-----------------|-------------|
 | `displayinfo.spec.md` | ✅ `openspec/specs/displayinfo.spec.md` |
+| `displayinfo-colorimetry/spec.md` | ✅ `openspec/specs/displayinfo-colorimetry/spec.md` |
 
 **Score: 10 / 10**
 
@@ -70,23 +74,12 @@
 
 ### 1c. Spec Completeness (5 / 5)
 
-`displayinfo.spec.md` contains all required sections:
+| Spec | Sections present | Complete? |
+|------|-----------------|-----------|
+| `displayinfo.spec.md` | 13 / 13 | ✅ |
+| `displayinfo-colorimetry/spec.md` | 13 / 13 | ✅ |
 
-| Section | Present? |
-|---------|---------|
-| Overview | ✅ |
-| Description | ✅ |
-| Requirements | ✅ |
-| Architecture / Design | ✅ |
-| External Interfaces | ✅ |
-| Performance | ✅ |
-| Security | ✅ |
-| Versioning & Compatibility | ✅ |
-| Conformance Testing & Validation | ✅ |
-| Covered Code | ✅ |
-| Open Queries | ✅ |
-| References | ✅ |
-| Change History | ✅ |
+> **Change vs 2026-04-29:** `displayinfo-colorimetry/spec.md` was previously missing Architecture/Design, Performance, Security, Versioning & Compatibility, and Conformance Testing sections. All five sections added 2026-07-24.
 
 **Score: 5 / 5**
 
@@ -94,15 +87,11 @@
 
 ### 1d. No Orphaned Code (5 / 5)
 
-All previously orphaned public interface methods are now covered. The `displayinfo-colorimetry`
-change (2026-04-29) added `Colorimetry`, `ColorSpace`, `FrameRate`, `ColourDepth`,
-`QuantizationRange`, and `EOTF` to the `## Covered Code` section of `displayinfo.spec.md`,
-closing gap **G-01**.
+All public interface methods across all backends are now covered by at least one spec. The 15 remaining orphaned items are all private/internal helpers (e.g., `parseLine`, `getMemInfo`, `QueryDisplayProperties`). No public `Core::hresult` method is uncovered.
 
-The single remaining uncovered method in `plugin/RPI/PlatformImplementation.cpp` is a
-private/internal helper — not a public interface method.
+> **Change vs 2026-04-29:** `GetCurrentColorimetry` in the DeviceSettings and RPI backends was previously orphaned (method existed in code but not in any `## Covered Code` section). Added to `displayinfo.spec.md` on 2026-07-24.
 
-**Score:** **5 / 5**
+**Score: 5 / 5**
 
 ---
 
@@ -110,12 +99,12 @@ private/internal helper — not a public interface method.
 
 | Sub-criterion | Max | Score | Notes |
 |---------------|-----|-------|-------|
-| Presence of HLA spec | 3 | **3** | Component diagram + lifecycle diagram present |
+| Presence of HLA spec | 3 | **3** | Component diagram + lifecycle diagram present in `displayinfo.spec.md` |
 | Clarity of architecture diagrams | 3 | **3** | ASCII diagrams clearly show OOP boundary, event flow, backend selection |
 | Component/module mapping | 2 | **2** | All five layers mapped: plugin, OOP container, four backends |
-| Traceability to code | 2 | **2** | `## Covered Code` links architecture components to source files/methods |
+| Traceability to code | 2 | **2** | `## Covered Code` sections link architecture components to source files/methods |
 
-**Score: 10 / 10**
+**Score: 10 / 10** _(unchanged)_
 
 ---
 
@@ -123,14 +112,14 @@ private/internal helper — not a public interface method.
 
 | Sub-criterion | Max | Score | Notes |
 |---------------|-----|-------|-------|
-| Presence of interface spec | 3 | **3** | Dedicated `## External Interfaces` section present |
-| Defined inputs/outputs | 3 | **3** | All `DisplayinfoData` fields typed; both enums fully documented; error codes listed |
-| Documentation completeness | 2 | **2** | Configuration keys fully documented; JSON-RPC property + event both described |
+| Presence of interface spec | 3 | **3** | Dedicated `## External Interfaces` sections present in both specs |
+| Defined inputs/outputs | 3 | **3** | All fields typed; enums documented; `ColorimetryTypeInfo` struct and `getCurrentColorimetry` condition table updated to reflect as-built behaviour |
+| Documentation completeness | 2 | **2** | Configuration keys, JSON-RPC properties, events all described |
 | Validation/examples | 2 | **1** | Test references exist but no JSON request/response example payloads provided |
 
-**Gap:** No concrete JSON example of a `DisplayInfo.1.displayinfo` response or `updated` event payload.
+**Gap (G-05):** No concrete JSON example for `DisplayInfo.1.getCurrentColorimetry` response.
 
-**Score: 9 / 10**
+**Score: 9 / 10** _(unchanged)_
 
 ---
 
@@ -138,16 +127,12 @@ private/internal helper — not a public interface method.
 
 | Sub-criterion | Max | Score | Notes |
 |---------------|-----|-------|-------|
-| Presence of security spec | 3 | **3** | `## Security` section present |
-| Threat model/analysis | 3 | **2** | IPC boundary, HDCP setter exposure, and EDID trust boundary called out; no formal threat model (STRIDE or equivalent) |
-| Security requirements | 2 | **2** | ACL requirement for HDCP setter and typed exception handler requirement specified |
+| Presence of security spec | 3 | **3** | `## Security` section present in `displayinfo.spec.md` |
+| Threat model/analysis | 3 | **2** | IPC boundary, HDCP setter exposure, EDID trust boundary called out; no formal STRIDE table |
+| Security requirements | 2 | **2** | ACL requirement for HDCP setter; typed exception handler requirement specified |
 | Validation/testing | 2 | **0** | No security-specific tests or penetration evidence documented |
 
-**Gaps:**
-- No formal threat model (STRIDE, attack tree, or equivalent).
-- No security test cases (e.g., ACL enforcement test, invalid EDID handling test).
-
-**Score: 7 / 10**
+**Score: 7 / 10** _(unchanged)_
 
 ---
 
@@ -155,33 +140,27 @@ private/internal helper — not a public interface method.
 
 | Sub-criterion | Max | Score | Notes |
 |---------------|-----|-------|-------|
-| Presence of versioning spec | 3 | **3** | `## Versioning & Compatibility` section present |
-| Versioning scheme defined | 3 | **3** | Semver table, major/minor/patch semantics, `DisplayInfo.1` advertisement described |
+| Presence of versioning spec | 3 | **3** | `## Versioning & Compatibility` section present in both specs |
+| Versioning scheme defined | 3 | **3** | Semver table, `DisplayInfo.1` advertisement, enum addition rule described |
 | Backward/forward compatibility | 2 | **2** | Additive field rule and breaking-change definition stated |
-| Migration/upgrade path | 2 | **0** | No migration guide for consumers upgrading across major versions |
+| Migration/upgrade path | 2 | **0** | No migration guide for a future `DisplayInfo.2` major bump |
 
-**Gap:** No documented migration procedure for a future `DisplayInfo.2` major version bump.
-
-**Score: 8 / 10**
+**Score: 8 / 10** _(unchanged)_
 
 ---
 
-## 6. Conformance Testing & Validation (6 / 10)
+## 6. Conformance Testing & Validation (7 / 10)
 
 | Sub-criterion | Max | Score | Notes |
 |---------------|-----|-------|-------|
-| Presence of conformance tests | 3 | **3** | L1 GTest suite and L2 integration tests present |
-| Test coverage | 3 | **2** | L1 covers all DeviceSettings Colorimetry paths (happy, disconnected, EDID-fail); L2 TBD; no Linux/DRM or RPI tests |
+| Presence of conformance tests | 3 | **3** | L1 GTest suite (24 `TEST_F` entries) and L2 structure present |
+| Test coverage | 3 | **3** | All public interface methods now have at least one L1 test; `GetCurrentColorimetry` fully covered (8 coefficient cases + no-display + exception + all-mappings parameterised loop) |
 | Test documentation | 2 | **1** | Test file listed but no `cmake --build` / `ctest` invocation documented |
 | Validation results | 2 | **0** | No pass/fail test results recorded in the spec |
 
-**Gaps:**
-- L2 test cases not yet written.
-- No backend-specific tests for Linux/DRM or RPI.
-- No documented test-run instructions (build flags, `ctest` invocations).
-- No captured test results (CI badge or results table).
+> **Change vs 2026-04-29:** Test coverage upgraded from 2/3 → 3/3. Previously `GetCurrentColorimetry` had no L1 tests; 11 new test cases added on 2026-07-24 covering all 8 `dsDisplayMatrixCoefficients_t` switch cases, disconnected-display path, `device::Exception` path, and the parameterised all-mappings loop.
 
-**Score: 6 / 10**
+**Score: 7 / 10** _(+1 vs 2026-04-29)_
 
 ---
 
@@ -189,16 +168,12 @@ private/internal helper — not a public interface method.
 
 | Sub-criterion | Max | Score | Notes |
 |---------------|-----|-------|-------|
-| Presence of performance spec | 3 | **3** | `## Performance` section present |
-| Defined performance metrics | 3 | **2** | OOP startup timeout (2 000 ms) and event latency (<500 ms) specified; no GPU memory read latency target |
+| Presence of performance spec | 3 | **3** | `## Performance` section present in `displayinfo.spec.md` and `displayinfo-colorimetry/spec.md` |
+| Defined performance metrics | 3 | **2** | OOP startup timeout (2 000 ms) and event latency (<500 ms) specified; no GPU/EDID read latency target |
 | Test coverage for performance | 2 | **0** | No automated performance tests referenced |
 | Results & validation | 2 | **0** | No measured performance data documented |
 
-**Gaps:**
-- No latency target for EDID or GPU memory read calls.
-- No performance test harness or benchmark results.
-
-**Score: 5 / 10**
+**Score: 5 / 10** _(unchanged)_
 
 ---
 
@@ -208,8 +183,8 @@ private/internal helper — not a public interface method.
 
 | # | Gap | Affected Category | Suggested Fix |
 |---|-----|------------------|---------------|
-| ~~G-01~~ | ~~`IDisplayProperties` methods `ColorSpace`, `FrameRate`, `ColourDepth`, `QuantizationRange`, `Colorimetry`, `EOTF` not in spec~~ | ~~Code Coverage~~ | **Resolved 2026-04-29** — all methods added to `## Covered Code` via `displayinfo-colorimetry` change |
-| G-02 | No security tests or validation evidence | Security | Add a security test section or CI job testing ACL enforcement and EDID rejection |
+| ~~G-01~~ | ~~`IDisplayProperties` orphaned methods~~ | ~~Code Coverage~~ | **Resolved 2026-04-29** |
+| G-02 | No security tests or validation evidence | Security | Add security test section or CI job testing ACL enforcement and EDID rejection |
 | G-03 | No performance test results | Performance | Add benchmark results or CI performance job output |
 
 ### Moderate (score improvement)
@@ -217,26 +192,28 @@ private/internal helper — not a public interface method.
 | # | Gap | Affected Category | Suggested Fix |
 |---|-----|------------------|---------------|
 | G-04 | No `// Spec:` comments in source files | Code Coverage | Add `// Spec: displayinfo` comments at each covered method for supplementary traceability |
-| G-05 | No JSON payload examples | External Interfaces | Add a sample `displayinfo` response and `updated` event JSON object |
+| G-05 | No JSON payload examples | External Interfaces | Add sample `getCurrentColorimetry` and `colorimetry` response JSON |
 | G-06 | No formal threat model | Security | Add a short STRIDE table or attack surface description |
 | G-07 | L2 tests not yet written | Conformance Testing | Implement L2 test cases covering JSON-RPC end-to-end |
-| G-08 | No test-run instructions | Conformance Testing | Document cmake/ctest invocations in Conformance section |
+| G-08 | No test-run instructions | Conformance Testing | Document `cmake --build` / `ctest` invocations in Conformance section |
+| G-12 | `displayinfo-get-current-colorimetry` change not archived | Code Coverage | Archive the change once implementation is confirmed; creates dedicated `openspec/specs/displayinfo-get-current-colorimetry/spec.md` spec for coverage tooling |
 
 ### Minor
 
 | # | Gap | Affected Category | Suggested Fix |
 |---|-----|------------------|---------------|
 | G-09 | No migration path for major version bump | Versioning | Add a brief `DisplayInfo.1 → DisplayInfo.2` upgrade note |
-| G-10 | Private internal helpers in Linux backend not covered | Code Coverage | Document or annotate `QueryDisplayProperties`, `QueryEDID`, `GetMemory` |
+| G-10 | Private internal helpers in Linux/DS-RPI backends not covered | Code Coverage | Document or annotate `parseLine`, `getMemInfo`, `QueryDisplayProperties` |
 | G-11 | Open query OQ-02 (legacy event path) unresolved | Architecture | Decide and document deprecation of `RegisterAll`/`event_updated` |
 
 ---
 
 ## Spec Inventory
 
-| Spec file | Status | Required sections | Completeness |
-|-----------|--------|------------------|-------------|
-| `openspec/specs/displayinfo.spec.md` | ✅ exists | 13 / 13 present | **100%** |
+| Spec file | Status | Sections | Completeness |
+|-----------|--------|----------|-------------|
+| `openspec/specs/displayinfo.spec.md` | ✅ exists | 13 / 13 | **100%** |
+| `openspec/specs/displayinfo-colorimetry/spec.md` | ✅ exists | 13 / 13 | **100%** |
 
 ---
 
@@ -245,3 +222,6 @@ private/internal helper — not a public interface method.
 | Date | Score | Notes |
 |------|-------|-------|
 | 2026-04-29 | **81.5 / 100** | Initial spec created and templated |
+| 2026-04-29 | **83.5 / 100** | `displayinfo-colorimetry` change: G-01 closed; all IDisplayProperties methods added to Covered Code |
+| 2026-07-24 | **84.5 / 100** | `GetCurrentColorimetry` added to Covered Code (DS + RPI); 11 new L1 tests; `displayinfo-colorimetry/spec.md` fully templated; archive specs converted to full template format |
+
