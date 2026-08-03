@@ -20,6 +20,7 @@
 #include "../DisplayInfoTracing.h"
 #include "SoC_abstraction.h"
 
+
 #include <interfaces/IDisplayInfo.h>
 
 #include "host.hpp"
