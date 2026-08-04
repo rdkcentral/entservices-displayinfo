@@ -770,6 +770,48 @@ public:
         return rc;
     }
 
+    Core::hresult GetCurrentColorimetry(ColorimetryTypeInfo& info /* @out */) const override
+    {
+        info.colorimetry = COLORIMETRY_UNKNOWN;
+        if (!IsDisplayAccessible()) {
+            LOGERR("GetCurrentColorimetry: display not accessible");
+            return Core::ERROR_NONE;
+        }
+        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        if (vp == nullptr) {
+            LOGERR("GetCurrentColorimetry: IDeviceSettingsVideoPort not available");
+            return Core::ERROR_UNAVAILABLE;
+        }
+
+        Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients matCoeff =
+            Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN;
+        Core::hresult rc = vp->GetMatrixCoefficients(DSHelper::getCachedVideoPortHandle(DSHelper::getDefaultVideoPortName()), matCoeff);
+        vp->Release();
+
+        if (rc == Core::ERROR_NONE) {
+            LOGINFO("GetCurrentColorimetry: matrixCoefficients=%d", static_cast<int>(matCoeff));
+            switch (matCoeff) {
+            case Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709:
+                info.colorimetry = COLORIMETRY_BT709; break;
+            case Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_SMPTE_170M:
+                info.colorimetry = COLORIMETRY_SMPTE170M; break;
+            case Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_XVYCC_709:
+                info.colorimetry = COLORIMETRY_XVYCC709; break;
+            case Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_EXVYCC_601:
+                info.colorimetry = COLORIMETRY_XVYCC601; break;
+            case Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL:
+                info.colorimetry = COLORIMETRY_BT2020RGB_YCBCR; break;
+            case Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_CL:
+                info.colorimetry = COLORIMETRY_BT2020YCCBCBRC; break;
+            case Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN:
+                info.colorimetry = COLORIMETRY_UNKNOWN; break;
+            default:
+                info.colorimetry = COLORIMETRY_OTHER; break;
+            }
+        }
+        return rc;
+    }
+
     // -------------------------------------------------------------------------
     // IHDRProperties
     // -------------------------------------------------------------------------
