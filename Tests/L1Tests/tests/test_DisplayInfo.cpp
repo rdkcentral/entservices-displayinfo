@@ -1445,7 +1445,9 @@ TEST_F(DisplayInfoTestTest, FrameRate_ExceptionHandling)
         .WillByDefault(::testing::Return(videoPort));
     ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
         .WillByDefault(::testing::ReturnRef(videoOutputPort));
-    
+    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+        .WillByDefault(::testing::Return(true));
+
     // Mock to throw exception
     ON_CALL(*p_videoOutputPortMock, getResolution())
         .WillByDefault(::testing::Invoke([&]() -> device::VideoResolution& {

@@ -556,6 +556,11 @@ public:
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
             device::VideoOutputPort vPort = device::Host::getInstance().getVideoOutputPort(strVideoPort.c_str());
+            if (!vPort.isDisplayConnected())
+            {
+                LOGERR("HDMI not connected!");
+                return ret;
+            }
             device::VideoResolution resolution = vPort.getResolution();
             device::PixelResolution pr = resolution.getPixelResolution();
             device::FrameRate fr = resolution.getFrameRate();
