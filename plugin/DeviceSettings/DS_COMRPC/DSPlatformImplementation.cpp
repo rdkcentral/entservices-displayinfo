@@ -616,6 +616,10 @@ public:
     Core::hresult FrameRate(FrameRateType& rate /* @out */) const override
     {
         rate = FRAMERATE_UNKNOWN;
+        if (!IsDisplayAccessible()) {
+            LOGERR("FrameRate: HDMI not connected!");
+            return Core::ERROR_NONE;
+        }
         const int32_t vpHandle = DSHelper::getCachedVideoPortHandle(DSHelper::getDefaultVideoPortName());
         if (vpHandle == INVALID_DS_HANDLE) {
             LOGERR("FrameRate: video port handle not available");
