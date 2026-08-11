@@ -578,8 +578,8 @@ public:
     {
         cs = FORMAT_UNKNOWN;
         if (!IsDisplayAccessible()) {
-            LOGERR("ColorSpace: display not accessible");
-            return Core::ERROR_UNAVAILABLE;
+            LOGERR("ColorSpace: HDMI not connected!");
+            return Core::ERROR_NONE;
         }
 
         auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
@@ -654,8 +654,8 @@ public:
     {
         colour = COLORDEPTH_UNKNOWN;
         if (!IsDisplayAccessible()) {
-            LOGERR("ColourDepth: display not accessible");
-            return Core::ERROR_UNAVAILABLE;
+            LOGERR("ColourDepth: HDMI not connected!");
+            return Core::ERROR_NONE;
         }
         auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
@@ -687,8 +687,8 @@ public:
     {
         qr = QUANTIZATIONRANGE_UNKNOWN;
         if (!IsDisplayAccessible()) {
-            LOGERR("QuantizationRange: display not accessible");
-            return Core::ERROR_UNAVAILABLE;
+            LOGERR("QuantizationRange: HDMI not connected!");
+            return Core::ERROR_NONE;
         }
         auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
@@ -813,7 +813,10 @@ public:
                 info.colorimetry = COLORIMETRY_OTHER; break;
             }
         }
-        return rc;
+        if (info.colorimetry == COLORIMETRY_UNKNOWN) {
+            LOGERR("No active display connected, returning COLORIMETRY_UNKNOWN");
+        }
+        return Core::ERROR_NONE;
     }
 
     // -------------------------------------------------------------------------
