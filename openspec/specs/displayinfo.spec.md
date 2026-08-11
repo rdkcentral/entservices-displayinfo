@@ -638,6 +638,30 @@ Electro-Optical Transfer Function in use on the primary video output.
 
 ---
 
+### JSON-RPC Property – `getCurrentColorimetry`
+
+**Method type:** Property (read-only)  
+**Endpoint:** `DisplayInfo.1.getCurrentColorimetry`  
+**Interface method:** `Exchange::IDisplayProperties::GetCurrentColorimetry(ColorimetryTypeInfo& info)`
+
+Active colorimetry standard of the HDMI output link, derived from the DS matrix coefficient of the first connected video output port found by iterating all ports. Returns `info.colorimetry` serialised as the `colorimetry` key in the JSON-RPC response.
+
+| Condition | `info.colorimetry` | Return code |
+|-----------|------------------|-----------|
+| First connected port, `dsDISPLAY_MATRIXCOEFFICIENT_BT_709` | `COLORIMETRY_BT709` | `ERROR_NONE` |
+| First connected port, `dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M` | `COLORIMETRY_SMPTE170M` | `ERROR_NONE` |
+| First connected port, `dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709` | `COLORIMETRY_XVYCC709` | `ERROR_NONE` |
+| First connected port, `dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601` | `COLORIMETRY_XVYCC601` | `ERROR_NONE` |
+| First connected port, `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL` | `COLORIMETRY_BT2020RGB_YCBCR` | `ERROR_NONE` |
+| First connected port, `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL` | `COLORIMETRY_BT2020YCCBCBRC` | `ERROR_NONE` |
+| First connected port, `dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN` (DS sentinel) | `COLORIMETRY_UNKNOWN` | `ERROR_NONE` |
+| First connected port, any other unmapped coefficient | `COLORIMETRY_OTHER` | `ERROR_NONE` |
+| No connected port found across all ports | `COLORIMETRY_UNKNOWN` | `ERROR_NONE` |
+| `device::Exception` thrown in DeviceSettings backend | `COLORIMETRY_UNKNOWN` | `ERROR_NONE` |
+| Linux / RPI backends | — | `ERROR_UNAVAILABLE` |
+
+---
+
 ### Configuration Object
 
 Configuration is injected via `IShell::ConfigLine()` and parsed per platform.
@@ -745,6 +769,17 @@ Test cases:
 | `STBCapabilities_ExceptionHandling` | `STBCapabilities()` throws `device::Exception` |
 | `EDID_ExceptionHandling` | `EDID()` throws `device::Exception` |
 | `ResolutionChange_NotificationTest` | `Updated` event dispatch on resolution change |
+| `CurrentColorimetry_BT709` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_709` → `COLORIMETRY_BT709` |
+| `CurrentColorimetry_BT2020NCL` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL` → `COLORIMETRY_BT2020RGB_YCBCR` |
+| `CurrentColorimetry_BT2020CL` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL` → `COLORIMETRY_BT2020YCCBCBRC` |
+| `CurrentColorimetry_SMPTE170M` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M` → `COLORIMETRY_SMPTE170M` |
+| `CurrentColorimetry_XvYCC709` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709` → `COLORIMETRY_XVYCC709` |
+| `CurrentColorimetry_XvYCC601` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601` → `COLORIMETRY_XVYCC601` |
+| `CurrentColorimetry_DSUnknownSentinel` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN` → `COLORIMETRY_UNKNOWN` |
+| `CurrentColorimetry_GenuinelyUnmapped` | `GetCurrentColorimetry()` — unrecognised coefficient (9999) → `COLORIMETRY_OTHER` |
+| `CurrentColorimetry_NoDisplayConnected` | `GetCurrentColorimetry()` — no port connected → `COLORIMETRY_UNKNOWN`, `ERROR_NONE` |
+| `CurrentColorimetry_DeviceException` | `GetCurrentColorimetry()` — `device::Exception` → `COLORIMETRY_UNKNOWN`, `ERROR_NONE` |
+| `CurrentColorimetry_AllMappings` | `GetCurrentColorimetry()` — all 8 switch-case entries verified in one parameterised loop |
 
 ### L2 Tests (`Tests/L2Tests/`)
 
@@ -813,6 +848,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoImplementation::QuantizationRange`
     - `DisplayInfoImplementation::Colorimetry`
     - `DisplayInfoImplementation::EOTF`
+    - `DisplayInfoImplementation::GetCurrentColorimetry`
     - `DisplayInfoImplementation::ResolutionChangeImpl`
     - `DisplayInfoImplementation::OnResolutionPreChange`
     - `DisplayInfoImplementation::OnResolutionPostChange`
@@ -875,6 +911,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoImplementation::QuantizationRange`
     - `DisplayInfoImplementation::Colorimetry`
     - `DisplayInfoImplementation::EOTF`
+    - `DisplayInfoImplementation::GetCurrentColorimetry`
 - `plugin/DisplayInfo.conf.in`:
     - Plugin configuration template
 - `plugin/DisplayInfo.config`:
@@ -950,3 +987,4 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan.
 - 2026-04-29 — displayinfo-colorimetry change — Added `IDisplayProperties` orphaned methods to Covered Code (closes gap G-01); `Colorimetry` disconnected-path fix documented.
 - 2026-04-29 — openspec-sync-specs — Merged ADDED requirements from displayinfo-colorimetry change: REQ-F-11 (Colorimetry error handling), REQ-NF-05 (RAII memory management), DeviceSettings backend Colorimetry scenarios.
+- 2026-07-24 — openspec-templater — Updated `getCurrentColorimetry` property section: corrected interface method from `CurrentColorimetry(ColorimetryType&)` to `GetCurrentColorimetry(ColorimetryTypeInfo& info)`, revised condition table to reflect port-iteration strategy, explicit `dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN → COLORIMETRY_UNKNOWN` case, and `default → COLORIMETRY_OTHER`; added `GetCurrentColorimetry` to Covered Code for DeviceSettings and RPI backends; added 11 new `CurrentColorimetry_*` L1 test cases to Conformance Testing table.

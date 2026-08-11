@@ -124,6 +124,49 @@ is unreadable.
 
 ---
 
+## Architecture / Design
+
+_Not applicable — this capability is a single read-only JSON-RPC property with no separate service layer or cross-cutting architectural concerns. Refer to the parent `displayinfo.spec.md` for the overall plugin architecture._
+
+---
+
+## Performance
+
+- EDID bytes are read from hardware on every `Colorimetry()` call on the DeviceSettings backend; results are not cached. Callers polling frequently should apply their own throttle.
+- The EDID bitmask parse is O(n) over the number of set bits — negligible overhead.
+
+---
+
+## Security
+
+_Not applicable — `DisplayInfo.colorimetry` is a read-only property with no user-supplied input and no write path. The EDID data originates from the connected display hardware and is not treated as trusted input by the plugin._
+
+---
+
+## Versioning & Compatibility
+
+- Introduced as part of the `2026-04-29-displayinfo-colorimetry` change against `DisplayInfo.1`.
+- Adding new `ColorimetryType` enum values is backwards-compatible (clients ignore unknown values returned in arrays).
+- Removing existing enum values or changing `ERROR_NONE`/`ERROR_UNAVAILABLE` return semantics is a breaking change requiring a major version bump.
+
+---
+
+## Conformance Testing & Validation
+
+### L1 Tests (`Tests/L1Tests/`)
+
+| Test name | Coverage |
+|-----------|----------|
+| `Colorimetry` | EDID colorimetry bitmask parsing — verifies mapped `ColorimetryType` values are returned |
+
+### Manual Validation
+
+- [ ] `DisplayInfo.colorimetry` returns a non-empty array on a connected display with known colorimetry EDID data.
+- [ ] `DisplayInfo.colorimetry` returns an empty array when no display is connected.
+- [ ] `DisplayInfo.colorimetry` returns `ERROR_UNAVAILABLE` on a Linux/DRM or BCM/RPI build.
+
+---
+
 ## Covered Code
 
 - `plugin/DeviceSettings/PlatformImplementation.cpp`:
@@ -159,3 +202,4 @@ is unreadable.
 
 - 2026-04-29 — displayinfo-colorimetry change — Initial spec created for Colorimetry property capability.
 - 2026-04-29 — openspec-sync-specs — Synced from change spec to canonical specs directory.
+- 2026-07-24 — openspec-templater — Added missing template sections: Architecture/Design, Performance, Security, Versioning & Compatibility, Conformance Testing & Validation.

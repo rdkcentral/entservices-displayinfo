@@ -508,7 +508,6 @@ public:
     Core::hresult ColorSpace(ColourSpaceType& cs /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
-
         cs = FORMAT_UNKNOWN;
         try
         {
@@ -596,7 +595,6 @@ public:
     {
         int ret = Core::ERROR_NONE;
         colour = COLORDEPTH_UNKNOWN;
-
         try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
