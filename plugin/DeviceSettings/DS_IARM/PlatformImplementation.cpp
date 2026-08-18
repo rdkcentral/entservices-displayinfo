@@ -16,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "../Module.h"
-#include "../DisplayInfoTracing.h"
-#include "SoC_abstraction.h"
+#include "../../Module.h"
+#include "../../DisplayInfoTracing.h"
+#include "../SoC_abstraction.h"
 
 #include <interfaces/IDisplayInfo.h>
 
@@ -508,7 +508,6 @@ public:
     Core::hresult ColorSpace(ColourSpaceType& cs /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
-        
         cs = FORMAT_UNKNOWN;
         try
         {
@@ -596,7 +595,6 @@ public:
     {
         int ret = Core::ERROR_NONE;
         colour = COLORDEPTH_UNKNOWN;
-        
         try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
@@ -635,7 +633,7 @@ public:
     {
         int ret = Core::ERROR_NONE;
         qr = QUANTIZATIONRANGE_UNKNOWN;
-        
+
         try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
