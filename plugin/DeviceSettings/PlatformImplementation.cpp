@@ -879,7 +879,7 @@ public:
         if(capabilities & dsHDRSTANDARD_HLG) hdrCapabilities.push_back(HDR_HLG);
         if(capabilities & dsHDRSTANDARD_DolbyVision) hdrCapabilities.push_back(HDR_DOLBYVISION);
         if(capabilities & dsHDRSTANDARD_TechnicolorPrime) hdrCapabilities.push_back(HDR_TECHNICOLOR);
-	// Treat SDR and Invalid as HDR_OFF to ensure that the list always has at least one valid entry
+        // Treat SDR and Invalid as HDR_OFF to ensure that the list always has at least one valid entry
         if(capabilities & dsHDRSTANDARD_SDR) hdrCapabilities.push_back(HDR_OFF);
         if(capabilities & dsHDRSTANDARD_Invalid) hdrCapabilities.push_back(HDR_OFF);
 
