@@ -329,7 +329,7 @@ public:
 
         Exchange::IDeviceSettingsAudio::StereoMode mode =
             Exchange::IDeviceSettingsAudio::AUDIO_STEREO_UNKNOWN;
-        Core::hresult rc = audio->GetStereoMode(audioHandle, mode);
+        Core::hresult rc = audio->GetStereoMode(audioHandle, mode, true);
         if (rc == Core::ERROR_NONE) {
             value = (mode == Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH);
         }
