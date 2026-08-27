@@ -118,6 +118,28 @@ private:
         DisplayInfoImplementation& _parent;
     };
 
+    // Job submitted to the worker pool by DispatchResolutionChange.
+    // Holds a reference to the implementation + source; calls Dispatch(source)
+    // on the worker thread so the DS notification thread returns immediately.
+    class DispatchJob : public Core::IDispatch {
+    public:
+        DispatchJob(DisplayInfoImplementation* impl,
+                           IConnectionProperties::INotification::Source src)
+            : _impl(impl), _src(src) { if (_impl != nullptr) _impl->AddRef(); }
+        ~DispatchJob() { if (_impl != nullptr) _impl->Release(); }
+        static Core::ProxyType<Core::IDispatch> Create(
+            DisplayInfoImplementation* impl,
+            IConnectionProperties::INotification::Source src)
+        {
+            return Core::ProxyType<Core::IDispatch>(
+                Core::ProxyType<DispatchJob>::Create(impl, src));
+        }
+        void Dispatch() override { _impl->Dispatch(_src); }
+    private:
+        DisplayInfoImplementation* _impl;
+        IConnectionProperties::INotification::Source _src;
+    };
+
 public:
     DisplayInfoImplementation()
         : _adminLock()
@@ -189,7 +211,7 @@ public:
         {
             auto* vp = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
             if (vp != nullptr) {
-                vp->Register(&_DSVideoPortNotification);
+                vp->Register("DisplayInfo", &_DSVideoPortNotification);
                 vp->Release();
             } else {
                 LOGERR("OnDeviceSettingsActivated: IDeviceSettingsVideoPort not available");
@@ -1079,10 +1101,13 @@ private:
     /** Dispatch a resolution change event to all registered INotification sinks. */
     void DispatchResolutionChange(IConnectionProperties::INotification::Source source)
     {
+        Core::IWorkerPool::Instance().Submit(DispatchJob::Create(this, source));
+    }
+
+    void Dispatch(IConnectionProperties::INotification::Source source)
+    {
         _adminLock.Lock();
-        for (auto* obs : _observers) {
-            obs->Updated(source);
-        }
+        for (auto* obs : _observers) obs->Updated(source);
         _adminLock.Unlock();
     }
 
