@@ -174,7 +174,7 @@ public:
     // -------------------------------------------------------------------------
     Core::hresult Configure(PluginHost::IShell* service) override
     {
-        DSHelper::Open(service);
+        DSHelper::Open(service, "DisplayInfo");
         return Core::ERROR_NONE;
     }
 
