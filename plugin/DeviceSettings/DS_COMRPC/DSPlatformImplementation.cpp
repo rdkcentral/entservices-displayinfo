@@ -309,7 +309,7 @@ public:
         }
         const std::string audioPortName = DSHelper::getDefaultAudioPortName();
 
-        auto* audio = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsAudio>();
+        auto* audio = AcquireSubInterface<Exchange::IDeviceSettingsAudio>();
         if (audio == nullptr) {
             LOGERR("IsAudioPassthrough: IDeviceSettingsAudio not available");
             return Core::ERROR_UNAVAILABLE;
@@ -345,7 +345,7 @@ public:
             LOGERR("Connected: video port handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("Connected: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -424,7 +424,7 @@ public:
             LOGERR("HDCPProtection(get): video port handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("HDCPProtection(get): IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -562,7 +562,7 @@ public:
             return Core::ERROR_UNAVAILABLE;
         }
 
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("PortName: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -604,7 +604,7 @@ public:
             return Core::ERROR_NONE;
         }
 
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("ColorSpace: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -647,7 +647,7 @@ public:
             LOGERR("FrameRate: video port handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("FrameRate: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -679,7 +679,7 @@ public:
             LOGERR("ColourDepth: HDMI not connected!");
             return Core::ERROR_NONE;
         }
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("ColourDepth: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -712,7 +712,7 @@ public:
             LOGERR("QuantizationRange: HDMI not connected!");
             return Core::ERROR_NONE;
         }
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("QuantizationRange: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -770,7 +770,7 @@ public:
             LOGERR("EOTF: display not accessible");
             return Core::ERROR_UNAVAILABLE;
         }
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("EOTF: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -803,7 +803,7 @@ public:
             LOGERR("GetCurrentColorimetry: display not accessible");
             return Core::ERROR_NONE;
         }
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("GetCurrentColorimetry: IDeviceSettingsVideoPort not available");
             return Core::ERROR_UNAVAILABLE;
@@ -856,7 +856,7 @@ public:
         int32_t capabilities = 0;
 
         if (IsDisplayAccessible()) {
-            auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+            auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
             if (vp != nullptr) {
                 vp->GetTVHDRCapabilities(DSHelper::getCachedVideoPortHandle(DSHelper::getDefaultVideoPortName()), capabilities);
                 vp->Release();
@@ -894,7 +894,7 @@ public:
         int32_t capabilities = 0;
 
         if (DSHelper::getCachedVideoDeviceHandle(0) != INVALID_DS_HANDLE) {
-            auto* vd = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoDevice>();
+            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd != nullptr) {
                 vd->GetHDRCapabilities(DSHelper::getCachedVideoDeviceHandle(0), capabilities);
                 vd->Release();
@@ -930,7 +930,7 @@ public:
         bool isHdr = false;
 
         if (IsDisplayAccessible()) {
-            auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+            auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
             if (vp != nullptr) {
                 vp->IsVideoPortOutputHDR(DSHelper::getCachedVideoPortHandle(DSHelper::getDefaultVideoPortName()), isHdr);
                 vp->Release();
@@ -952,17 +952,6 @@ public:
 
 private:
     /**
-     * Const wrapper so const methods can call non-const AcquireSubInterface<T>().
-     * The const_cast is safe because AcquireSubInterface() only reads from the
-     * COM-RPC proxy state; it does not modify any observable member variables.
-     */
-    template<typename T>
-    T* AcquireSubInterfaceMutable() const
-    {
-        return const_cast<DisplayInfoImplementation*>(this)->AcquireSubInterface<T>();
-    }
-
-    /**
      * Returns true if the display output is accessible for property queries.
      *
      * For internal display panels (TV platforms, e.g. Sharp), the plug-detect
@@ -983,7 +972,7 @@ private:
             return true;
         }
         bool connected = false;
-        auto* vp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsVideoPort>();
+        auto* vp = AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
         if (vp == nullptr) {
             LOGERR("IsDisplayAccessible: IDeviceSettingsVideoPort not available");
             return false;
@@ -1073,7 +1062,7 @@ private:
             LOGERR("GetEdidBytes: display handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
-        auto* disp = AcquireSubInterfaceMutable<Exchange::IDeviceSettingsDisplay>();
+        auto* disp = AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
         if (disp == nullptr) {
             LOGERR("GetEdidBytes: IDeviceSettingsDisplay not available");
             return Core::ERROR_UNAVAILABLE;
