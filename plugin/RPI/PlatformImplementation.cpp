@@ -225,7 +225,7 @@ public:
         }
 
         for (auto const& index : _observers) {
-            index->Updated(Exchange::IConnectionProperties::INotification::Source::HDMI_CHANGE);
+            index->Updated(Exchange::IConnectionProperties::INotification::Source::HDMI_CHANGE, false);
         }
 
         _adminLock.Unlock();

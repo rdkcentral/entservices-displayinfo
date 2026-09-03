@@ -103,6 +103,9 @@ public:
         {
            LOGERR("device::Manager::Initialize failed with unknown exception");
         }
+
+        // Cache the initial frame rate so later resolution-change events can detect a real change.
+        FrameRate(_cachedFrameRate);
     }
 
     DisplayInfoImplementation(const DisplayInfoImplementation&) = delete;
@@ -166,7 +169,7 @@ public:
         LOGINFO("OnResolutionPreChange: width %d, height %d",width, height);
         if(DisplayInfoImplementation::_instance)
         {
-           DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
+           DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE, false);
         }
     }
 
@@ -175,17 +178,31 @@ public:
         LOGINFO("OnResolutionPostChange: width %d, height %d",width, height);
         if(DisplayInfoImplementation::_instance)
         {
-           DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
+           bool isFrameRateChanged = DisplayInfoImplementation::_instance->IsFrameRateChanged();
+           DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE, isFrameRateChanged);
         }
     }
 
-    void ResolutionChangeImpl(IConnectionProperties::INotification::Source eventtype)
+    bool IsFrameRateChanged()
+    {
+        FrameRateType newRate = FRAMERATE_UNKNOWN;
+        FrameRate(newRate);
+        if (newRate != _cachedFrameRate)
+        {
+            _cachedFrameRate = newRate;
+	    return true;
+        }
+
+	return false;
+    }
+
+    void ResolutionChangeImpl(IConnectionProperties::INotification::Source eventtype, bool isFrameRateChanged)
     {
         _adminLock.Lock();
 
         std::list<IConnectionProperties::INotification*>::const_iterator index = _observers.begin();
         while(index != _observers.end()) {
-            (*index)->Updated(eventtype);
+            (*index)->Updated(eventtype, isFrameRateChanged);
             index++;
         }
 
@@ -923,6 +940,7 @@ public:
 private:
     std::list<IConnectionProperties::INotification*> _observers;
     mutable Core::CriticalSection _adminLock;
+    FrameRateType _cachedFrameRate = FRAMERATE_UNKNOWN;
 
 private:
     uint32_t GetEdidBytes(std::vector<uint8_t> &edid) const

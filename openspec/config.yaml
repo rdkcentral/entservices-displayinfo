@@ -2,8 +2,10 @@ schema: spec-driven
 
 # Project context
 context: |
-  Tech stack: C++17, CMake, websocketpp, nlohmann::json
-  Transport library for Firebolt SDK — abstracts WebSocket and JSON-RPC communication.
+  Tech stack: C++17, CMake, WPEFramework (Thunder) plugin framework, JSON-RPC.
+  entservices-displayinfo hosts the DisplayInfo WPEFramework plugin, which reports display/graphics
+  capabilities (resolution, HDCP, HDR, colorimetry, etc.) and fires an `updated` event with
+  source-type notifications (e.g. PRE_RESOLUTION_CHANGE, POST_RESOLUTION_CHANGE, HDMI_CHANGE, HDCP_CHANGE).
   Specs live in openspec/specs/ (canonical) and openspec/changes/archive/<change>/specs/ (archived).
   All spec files must follow the standard template defined in
   .github/skills/openspec-templater/spec_template.md.
@@ -16,11 +18,8 @@ rules:
     - Always include a "Non-goals" section.
   specs:
     - Every spec file MUST follow the standard template at .github/skills/openspec-templater/spec_template.md.
-    - Required sections in order: Overview, Description, Requirements, Architecture / Design,
-      External Interfaces, Performance, Security, Versioning & Compatibility,
-      Conformance Testing & Validation, Covered Code, Open Queries, References, Change History.
-    - Sections that are not applicable must be present with the note:
-      "_Not applicable — [brief reason]._"
+    - "Required sections in order: Overview, Description, Requirements, Architecture / Design, External Interfaces, Performance, Security, Versioning & Compatibility, Conformance Testing & Validation, Covered Code, Open Queries, References, Change History."
+    - Sections that are not applicable must be present with the note "_Not applicable — [brief reason]._".
     - The Covered Code section must list relevant src/ and include/ files and methods.
     - Open Queries must always be present, even if empty (_No open queries._).
     - Change History must include an entry for the current date.

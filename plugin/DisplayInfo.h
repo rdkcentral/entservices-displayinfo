@@ -46,9 +46,9 @@ namespace Plugin {
             }
             ~Notification() override = default;
 
-            void Updated(const Exchange::IConnectionProperties::INotification::Source event) override
+            void Updated(const Exchange::IConnectionProperties::INotification::Source event, const bool isFrameRateChanged) override
             {
-                Exchange::JConnectionProperties::Event::Updated(_parent, event);
+                Exchange::JConnectionProperties::Event::Updated(_parent, event, isFrameRateChanged);
             }
 
             void Activated(RPC::IRemoteConnection* connection VARIABLE_IS_NOT_USED) override {

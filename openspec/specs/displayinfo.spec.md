@@ -243,6 +243,7 @@ Fired whenever the display connection or resolution changes.
 | `POST_RESOLUTION_CHANGE` | Resolution change has completed |
 | `HDMI_CHANGE` | HDMI hot-plug state changed |
 | `HDCP_CHANGE` | HDCP handshake state changed |
+| `FRAMERATE_CHANGE` | Frame rate of the connected display changed as a result of a resolution change (DeviceSettings backend only) |
 
 ---
 
@@ -990,3 +991,4 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - 2026-04-29 — openspec-sync-specs — Merged ADDED requirements from displayinfo-colorimetry change: REQ-F-11 (Colorimetry error handling), REQ-NF-05 (RAII memory management), DeviceSettings backend Colorimetry scenarios.
 - 2026-07-24 — openspec-templater — Updated `getCurrentColorimetry` property section: corrected interface method from `CurrentColorimetry(ColorimetryType&)` to `GetCurrentColorimetry(ColorimetryTypeInfo& info)`, revised condition table to reflect port-iteration strategy, explicit `dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN → COLORIMETRY_UNKNOWN` case, and `default → COLORIMETRY_OTHER`; added `GetCurrentColorimetry` to Covered Code for DeviceSettings and RPI backends; added 11 new `CurrentColorimetry_*` L1 test cases to Conformance Testing table.
 - 2026-08-20 — Aligned `STBCapabilities` and `TVCapabilities` using common `BuildHDRCapabilities()` which maps `dsHDRSTANDARD_Invalid -> HDR_OFF` and `dsHDRSTANDARD_SDR -> HDR_SDR`.
+- 2026-09-03 — displayinfo-framerate-change — Added `FRAMERATE_CHANGE` to the `updated` event `Source` enum; DeviceSettings backend caches the frame rate on construction and emits `FRAMERATE_CHANGE` from `OnResolutionPostChange` when the frame rate differs from the cached value.

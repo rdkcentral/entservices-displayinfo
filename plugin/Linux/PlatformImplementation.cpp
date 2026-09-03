@@ -621,7 +621,7 @@ namespace Plugin {
             std::list<IConnectionProperties::INotification*>::const_iterator index = _observers.begin();
 
             if (index != _observers.end()) {
-                (*index)->Updated(IConnectionProperties::INotification::Source::HDMI_CHANGE);
+                (*index)->Updated(IConnectionProperties::INotification::Source::HDMI_CHANGE, false);
             }
         }
 
