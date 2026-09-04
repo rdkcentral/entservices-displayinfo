@@ -212,7 +212,8 @@ Only one backend is compiled per build target.
 
 | Value | Meaning |
 |-------|---------|
-| `HDR_OFF` | SDR (no HDR) |
+| `HDR_OFF` | No HDR |
+| `HDR_SDR` | SDR |
 | `HDR_10` | HDR10 |
 | `HDR_10PLUS` | HDR10+ |
 | `HDR_HLG` | Hybrid Log-Gamma |
@@ -988,3 +989,4 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - 2026-04-29 — displayinfo-colorimetry change — Added `IDisplayProperties` orphaned methods to Covered Code (closes gap G-01); `Colorimetry` disconnected-path fix documented.
 - 2026-04-29 — openspec-sync-specs — Merged ADDED requirements from displayinfo-colorimetry change: REQ-F-11 (Colorimetry error handling), REQ-NF-05 (RAII memory management), DeviceSettings backend Colorimetry scenarios.
 - 2026-07-24 — openspec-templater — Updated `getCurrentColorimetry` property section: corrected interface method from `CurrentColorimetry(ColorimetryType&)` to `GetCurrentColorimetry(ColorimetryTypeInfo& info)`, revised condition table to reflect port-iteration strategy, explicit `dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN → COLORIMETRY_UNKNOWN` case, and `default → COLORIMETRY_OTHER`; added `GetCurrentColorimetry` to Covered Code for DeviceSettings and RPI backends; added 11 new `CurrentColorimetry_*` L1 test cases to Conformance Testing table.
+- 2026-08-20 — Aligned `STBCapabilities` and `TVCapabilities` using common `BuildHDRCapabilities()` which maps `dsHDRSTANDARD_Invalid -> HDR_OFF` and `dsHDRSTANDARD_SDR -> HDR_SDR`.

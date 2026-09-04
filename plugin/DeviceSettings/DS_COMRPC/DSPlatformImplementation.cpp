@@ -73,6 +73,36 @@ private:
     using HdrteratorImplementation          = RPC::IteratorType<Exchange::IHDRProperties::IHDRIterator>;
     using ColorimetryIteratorImplementation = RPC::IteratorType<Exchange::IDisplayProperties::IColorimetryIterator>;
 
+    std::list<Exchange::IHDRProperties::HDRType> BuildHDRCapabilities(const int capabilities) const
+    {
+        std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
+
+        if (!capabilities) hdrCapabilities.push_back(HDR_OFF);
+        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10)){
+            hdrCapabilities.push_back(HDR_10);
+        }
+        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10PLUS)){
+            hdrCapabilities.push_back(HDR_10PLUS);
+        }
+        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HLG)){
+            hdrCapabilities.push_back(HDR_HLG);
+        }
+        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_DOLBYVISION)){
+            hdrCapabilities.push_back(HDR_DOLBYVISION);
+        }
+        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_TECHNICOLORPRIME)){
+            hdrCapabilities.push_back(HDR_TECHNICOLOR);
+        }
+        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_INVALID)){
+            hdrCapabilities.push_back(HDR_OFF);
+        }
+        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_SDR)){
+            hdrCapabilities.push_back(HDR_SDR);
+        }
+
+        return hdrCapabilities;
+    }
+
     // -------------------------------------------------------------------------
     // Inner notification delegate: IDeviceSettingsVideoPort::INotification
     //
@@ -852,7 +882,6 @@ public:
      */
     Core::hresult TVCapabilities(IHDRIterator*& type /* out */) const override
     {
-        std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
         int32_t capabilities = 0;
 
         if (IsDisplayAccessible()) {
@@ -863,21 +892,7 @@ public:
             }
         }
 
-        if (!capabilities) hdrCapabilities.push_back(HDR_OFF);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10))
-            hdrCapabilities.push_back(HDR_10);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10PLUS))
-            hdrCapabilities.push_back(HDR_10PLUS);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HLG))
-            hdrCapabilities.push_back(HDR_HLG);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_DOLBYVISION))
-            hdrCapabilities.push_back(HDR_DOLBYVISION);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_TECHNICOLORPRIME))
-            hdrCapabilities.push_back(HDR_TECHNICOLOR);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_INVALID))
-            hdrCapabilities.push_back(HDR_OFF);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_SDR))
-            hdrCapabilities.push_back(HDR_SDR);
+        const std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities = BuildHDRCapabilities(capabilities);
 
         type = Core::Service<HdrteratorImplementation>::Create<Exchange::IHDRProperties::IHDRIterator>(hdrCapabilities);
         return (type != nullptr ? Core::ERROR_NONE : Core::ERROR_GENERAL);
@@ -890,7 +905,6 @@ public:
      */
     Core::hresult STBCapabilities(IHDRIterator*& type /* out */) const override
     {
-        std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
         int32_t capabilities = 0;
 
         if (DSHelper::getCachedVideoDeviceHandle(0) != INVALID_DS_HANDLE) {
@@ -901,19 +915,7 @@ public:
             }
         }
 
-        if (!capabilities) hdrCapabilities.push_back(HDR_OFF);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10))
-            hdrCapabilities.push_back(HDR_10);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10PLUS))
-            hdrCapabilities.push_back(HDR_10PLUS);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HLG))
-            hdrCapabilities.push_back(HDR_HLG);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_DOLBYVISION))
-            hdrCapabilities.push_back(HDR_DOLBYVISION);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_TECHNICOLORPRIME))
-            hdrCapabilities.push_back(HDR_TECHNICOLOR);
-        if (capabilities & static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_INVALID))
-            hdrCapabilities.push_back(HDR_OFF);
+        const std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities = BuildHDRCapabilities(capabilities);
 
         type = Core::Service<HdrteratorImplementation>::Create<Exchange::IHDRProperties::IHDRIterator>(hdrCapabilities);
         return (type != nullptr ? Core::ERROR_NONE : Core::ERROR_GENERAL);

@@ -52,6 +52,23 @@ class DisplayInfoImplementation :
 private:
     using HdrteratorImplementation = RPC::IteratorType<Exchange::IHDRProperties::IHDRIterator>;
     using ColorimetryIteratorImplementation = RPC::IteratorType<Exchange::IDisplayProperties::IColorimetryIterator>;
+
+    std::list<Exchange::IHDRProperties::HDRType> BuildHDRCapabilities(const int capabilities) const
+    {
+        std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
+
+        if (!capabilities) hdrCapabilities.push_back(HDR_OFF);
+        if (capabilities & dsHDRSTANDARD_HDR10) hdrCapabilities.push_back(HDR_10);
+        if (capabilities & dsHDRSTANDARD_HDR10PLUS) hdrCapabilities.push_back(HDR_10PLUS);
+        if (capabilities & dsHDRSTANDARD_HLG) hdrCapabilities.push_back(HDR_HLG);
+        if (capabilities & dsHDRSTANDARD_DolbyVision) hdrCapabilities.push_back(HDR_DOLBYVISION);
+        if (capabilities & dsHDRSTANDARD_TechnicolorPrime) hdrCapabilities.push_back(HDR_TECHNICOLOR);
+        if (capabilities & dsHDRSTANDARD_Invalid) hdrCapabilities.push_back(HDR_OFF);
+        if (capabilities & dsHDRSTANDARD_SDR) hdrCapabilities.push_back(HDR_SDR);
+
+        return hdrCapabilities;
+    }
+
 public:
     template <typename T>
     T* baseInterface()
@@ -508,6 +525,7 @@ public:
     Core::hresult ColorSpace(ColourSpaceType& cs /* @out */) const override
     {
         int ret = Core::ERROR_NONE;
+
         cs = FORMAT_UNKNOWN;
         try
         {
@@ -595,6 +613,7 @@ public:
     {
         int ret = Core::ERROR_NONE;
         colour = COLORDEPTH_UNKNOWN;
+
         try
         {
             std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
@@ -807,8 +826,6 @@ public:
     // @return HDRType: array of HDR formats
     Core::hresult TVCapabilities(IHDRIterator*& type /* out */) const override
     {
-        std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
-
         int capabilities = static_cast<int>(dsHDRSTANDARD_NONE);
         try
         {
@@ -833,15 +850,7 @@ public:
         {
             LOGERR("Unknown exception occurred");
         }
-        if(!capabilities) hdrCapabilities.push_back(HDR_OFF);
-        if(capabilities & dsHDRSTANDARD_HDR10) hdrCapabilities.push_back(HDR_10);
-        if(capabilities & dsHDRSTANDARD_HDR10PLUS) hdrCapabilities.push_back(HDR_10PLUS);
-        if(capabilities & dsHDRSTANDARD_HLG) hdrCapabilities.push_back(HDR_HLG);
-        if(capabilities & dsHDRSTANDARD_DolbyVision) hdrCapabilities.push_back(HDR_DOLBYVISION);
-        if(capabilities & dsHDRSTANDARD_TechnicolorPrime) hdrCapabilities.push_back(HDR_TECHNICOLOR);
-        if(capabilities & dsHDRSTANDARD_Invalid)hdrCapabilities.push_back(HDR_OFF);
-        if(capabilities & dsHDRSTANDARD_SDR) hdrCapabilities.push_back(HDR_SDR);
-
+        const std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities = BuildHDRCapabilities(capabilities);
 
         type = Core::Service<HdrteratorImplementation>::Create<Exchange::IHDRProperties::IHDRIterator>(hdrCapabilities);
         return (type != nullptr ? Core::ERROR_NONE : Core::ERROR_GENERAL);
@@ -851,8 +860,6 @@ public:
     // @return HDRType: array of HDR formats
     Core::hresult STBCapabilities(IHDRIterator*& type /* out */) const override
     {
-        std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities;
-
         int capabilities = static_cast<int>(dsHDRSTANDARD_NONE);
         try
         {
@@ -871,14 +878,7 @@ public:
         {
             LOGERR("Unknown exception occurred");
         }
-        if(!capabilities) hdrCapabilities.push_back(HDR_OFF);
-        if(capabilities & dsHDRSTANDARD_HDR10) hdrCapabilities.push_back(HDR_10);
-        if(capabilities & dsHDRSTANDARD_HDR10PLUS) hdrCapabilities.push_back(HDR_10PLUS);
-        if(capabilities & dsHDRSTANDARD_HLG) hdrCapabilities.push_back(HDR_HLG);
-        if(capabilities & dsHDRSTANDARD_DolbyVision) hdrCapabilities.push_back(HDR_DOLBYVISION);
-        if(capabilities & dsHDRSTANDARD_TechnicolorPrime) hdrCapabilities.push_back(HDR_TECHNICOLOR);
-        if(capabilities & dsHDRSTANDARD_Invalid)hdrCapabilities.push_back(HDR_OFF);
-
+        const std::list<Exchange::IHDRProperties::HDRType> hdrCapabilities = BuildHDRCapabilities(capabilities);
 
         type = Core::Service<HdrteratorImplementation>::Create<Exchange::IHDRProperties::IHDRIterator>(hdrCapabilities);
         return (type != nullptr ? Core::ERROR_NONE : Core::ERROR_GENERAL);

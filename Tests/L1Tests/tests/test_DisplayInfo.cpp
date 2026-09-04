@@ -1299,6 +1299,7 @@ protected:
             {dsHDRSTANDARD_DolbyVision, {Exchange::IHDRProperties::HDR_DOLBYVISION}},
             {dsHDRSTANDARD_TechnicolorPrime, {Exchange::IHDRProperties::HDR_TECHNICOLOR}},
             {dsHDRSTANDARD_Invalid, {Exchange::IHDRProperties::HDR_OFF}},
+            {dsHDRSTANDARD_SDR, {Exchange::IHDRProperties::HDR_SDR}},
             // Test multiple capabilities combined
             {dsHDRSTANDARD_HDR10 | dsHDRSTANDARD_HLG, {Exchange::IHDRProperties::HDR_10, Exchange::IHDRProperties::HDR_HLG}},
             {dsHDRSTANDARD_HDR10 | dsHDRSTANDARD_HLG | dsHDRSTANDARD_DolbyVision, {Exchange::IHDRProperties::HDR_10, Exchange::IHDRProperties::HDR_HLG, Exchange::IHDRProperties::HDR_DOLBYVISION}},
