@@ -67,7 +67,40 @@ if (PLUGIN_DISPLAYINFO_BCM_VERSION_MAJOR)
             DISPLAYINFO_BCM_VERSION_MAJOR=${PLUGIN_DISPLAYINFO_BCM_VERSION_MAJOR})
 endif()
 
-if (USE_DEVICESETTINGS)
+# -------------------------------------------------------------------
+# USE_DEVICESETTING_PLUGIN: COM-RPC path via entservices-devicesettings
+# Mutually exclusive with USE_DEVICESETTINGS (libds path).
+# -------------------------------------------------------------------
+option(USE_DEVICESETTING_PLUGIN
+    "Use DeviceSettings COM-RPC plugin instead of libds for DisplayInfo" OFF)
+
+if (USE_DEVICESETTING_PLUGIN)
+    add_definitions(-DUSE_DEVICESETTING_PLUGIN)
+    message(STATUS "DisplayInfo: USE_DEVICESETTING_PLUGIN=ON (COM-RPC via entservices-helpers)")
+
+    find_package(${NAMESPACE}Helpers REQUIRED)
+
+    # edid-parser.hpp is needed for EDID width/height/colorimetry parsing.
+    # It lives under <staging-incdir>/rdk/ds/ in the Yocto sysroot.
+    find_path(EDID_PARSER_DIR NAMES edid-parser.hpp
+        PATHS "${STAGING_INCDIR}/rdk/ds"
+        PATH_SUFFIXES rdk/ds)
+    if (EDID_PARSER_DIR)
+        target_include_directories(${MODULE_NAME} PRIVATE ${EDID_PARSER_DIR})
+    else()
+        message(WARNING "DisplayInfo: edid-parser.hpp not found — EDID parsing may fail at compile time")
+    endif()
+
+    target_sources(${MODULE_NAME}
+        PRIVATE
+            DeviceSettings/DS_COMRPC/DSPlatformImplementation.cpp)
+
+    # displayinfo-soc is still needed for SoC_GetTotalGpuRam / SoC_GetFreeGpuRam.
+    target_link_libraries(${MODULE_NAME} PRIVATE
+        displayinfo-soc
+        ${NAMESPACE}::${NAMESPACE}Helpers)
+
+elseif (USE_DEVICESETTINGS)
     find_package(DS)
     find_package(IARMBus)
     target_include_directories(${MODULE_NAME} PRIVATE ${IARMBUS_INCLUDE_DIRS}
@@ -89,7 +122,7 @@ endif()
 
     target_sources(${MODULE_NAME}
         PRIVATE
-            DeviceSettings/PlatformImplementation.cpp)
+            DeviceSettings/DS_IARM/PlatformImplementation.cpp)
     if (BUILD_RPI)
         target_sources(${MODULE_NAME}
             PRIVATE
