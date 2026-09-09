@@ -42,7 +42,6 @@
 #include <interfaces/IConfiguration.h>
 #include "DeviceSettingsInterface.h"               // DSHelper + config stores + VP/Audio/VideoDevice sub-interfaces
 #include <interfaces/IDeviceSettingsDisplay.h>     // Exchange::IDeviceSettingsDisplay (GetDisplay, GetDisplayEdidBytes)
-#include "edid-parser.hpp"                         // edid_parser::COLORIMETRY_INFO_* constants
 
 #include "UtilsLogging.h"
 
