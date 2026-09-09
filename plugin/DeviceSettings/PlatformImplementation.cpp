@@ -766,15 +766,15 @@ public:
             uint32_t colorimetry_info = ParseColorimetryFromEdid(edidVec);
             LOGINFO("colorimetry = 0x%x", colorimetry_info);
             if (!colorimetry_info) colorimetryCaps.push_back(COLORIMETRY_UNKNOWN);
-            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC601)    colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
-            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_XVYCC709)    colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
-            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_SYCC601)     colorimetryCaps.push_back(COLORIMETRY_SYCC601);
-            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBEYCC601) colorimetryCaps.push_back(COLORIMETRY_OPYCC601);
-            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_ADOBERGB)    colorimetryCaps.push_back(COLORIMETRY_OPRGB);
-            if ((colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020CL) ||
-                (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020NCL)) colorimetryCaps.push_back(COLORIMETRY_BT2020YCCBCBRC);
-            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_BT2020RGB)   colorimetryCaps.push_back(COLORIMETRY_BT2020RGB_YCBCR);
-            if (colorimetry_info & edid_parser::COLORIMETRY_INFO_DCI_P3)      colorimetryCaps.push_back(COLORIMETRY_OTHER);
+            if (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_XVYCC601)    colorimetryCaps.push_back(COLORIMETRY_XVYCC601);
+            if (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_XVYCC709)    colorimetryCaps.push_back(COLORIMETRY_XVYCC709);
+            if (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_SYCC601)     colorimetryCaps.push_back(COLORIMETRY_SYCC601);
+            if (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_ADOBEYCC601) colorimetryCaps.push_back(COLORIMETRY_OPYCC601);
+            if (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_ADOBERGB)    colorimetryCaps.push_back(COLORIMETRY_OPRGB);
+            if ((colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_BT2020CL) ||
+                (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_BT2020NCL)) colorimetryCaps.push_back(COLORIMETRY_BT2020YCCBCBRC);
+            if (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_BT2020RGB)   colorimetryCaps.push_back(COLORIMETRY_BT2020RGB_YCBCR);
+            if (colorimetry_info & Exchange::IDeviceSettingsDisplay::DS_DISPLAY_COLORIMETRY_INFO_DCI_P3)      colorimetryCaps.push_back(COLORIMETRY_OTHER);
         } else {
             LOGERR("Display not connected, returning empty colorimetry list");
         }
