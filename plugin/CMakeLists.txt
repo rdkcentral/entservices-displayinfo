@@ -69,7 +69,7 @@ endif()
 
 if (USE_DEVICESETTINGS)
     find_package(IARMBus)
-    target_include_directories(${MODULE_NAME} PRIVATE ${IARMBUS_INCLUDE_DIRS}
+    target_include_directories(${MODULE_NAME} PRIVATE ${IARMBUS_INCLUDE_DIRS})
 if (RDK_SERVICES_L1_TEST OR DRDK_SERVICES_L2_TEST)
     target_link_libraries(${MODULE_NAME} PRIVATE
         ${NAMESPACE}Plugins::${NAMESPACE}Plugins
