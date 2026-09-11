@@ -141,9 +141,9 @@ protected:
 #ifdef USE_THUNDER_R4
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                    [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
+                    [&](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
                         displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
-                        auto* connectionProperties = displayInfoImplementation->QueryInterface<Exchange::IConnectionProperties>();
+                        void* connectionProperties = displayInfoImplementation->QueryInterface(Exchange::IConnectionProperties::ID);
                         TEST_LOG("Pass created connectionProperties: %p ", connectionProperties);
                         displayInfoImplementation.Release();
                         return connectionProperties;
@@ -151,9 +151,9 @@ protected:
 #else
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                    [&](const RPC::Object&  object, const uint32_t waitTime, uint32_t& connectionId, const string& className, const string& callsign) {
+                    [&](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
                         displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
-                        auto* connectionProperties = displayInfoImplementation->QueryInterface<Exchange::IConnectionProperties>();
+                        void* connectionProperties = displayInfoImplementation->QueryInterface(Exchange::IConnectionProperties::ID);
                         displayInfoImplementation.Release();
                         return connectionProperties;
                 }));
