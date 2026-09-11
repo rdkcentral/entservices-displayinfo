@@ -79,7 +79,6 @@ using ::testing::NiceMock;
 class DisplayInfoTest : public ::testing::Test {
 protected:
     Core::ProxyType<Plugin::DisplayInfo> plugin;
-    Core::ProxyType<Plugin::DisplayInfoImplementation> displayInfoImplementation;
     Core::JSONRPC::Handler& handler;
     DECL_CORE_JSONRPC_CONX connection;
     NiceMock<ServiceMock> service;
@@ -141,21 +140,16 @@ protected:
 #ifdef USE_THUNDER_R4
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                    [&](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
-                        displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
-                        void* connectionProperties = displayInfoImplementation->QueryInterface(Exchange::IConnectionProperties::ID);
+                    [](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
+                        void* connectionProperties = Core::Service<Plugin::DisplayInfoImplementation>::Create<Exchange::IConnectionProperties>();
                         TEST_LOG("Pass created connectionProperties: %p ", connectionProperties);
-                        displayInfoImplementation.Release();
                         return connectionProperties;
                 }));
 #else
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                    [&](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
-                        displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
-                        void* connectionProperties = displayInfoImplementation->QueryInterface(Exchange::IConnectionProperties::ID);
-                        displayInfoImplementation.Release();
-                        return connectionProperties;
+                    [](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
+                        return Core::Service<Plugin::DisplayInfoImplementation>::Create<Exchange::IConnectionProperties>();
                 }));
 #endif /*USE_THUNDER_R4 */
 
