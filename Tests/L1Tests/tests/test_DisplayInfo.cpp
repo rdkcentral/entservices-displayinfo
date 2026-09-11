@@ -143,12 +143,20 @@ protected:
             .WillByDefault(::testing::Invoke(
                     [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
                         displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
-                        TEST_LOG("Pass created displayInfoImplementation: %p ", &displayInfoImplementation);
-                        return &displayInfoImplementation;
+                        auto* connectionProperties = displayInfoImplementation->QueryInterface<Exchange::IConnectionProperties>();
+                        TEST_LOG("Pass created connectionProperties: %p ", connectionProperties);
+                        displayInfoImplementation.Release();
+                        return connectionProperties;
                 }));
 #else
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
-             .WillByDefault(::testing::Return(displayInfoImplementation));
+            .WillByDefault(::testing::Invoke(
+                    [&](const RPC::Object&  object, const uint32_t waitTime, uint32_t& connectionId, const string& className, const string& callsign) {
+                        displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
+                        auto* connectionProperties = displayInfoImplementation->QueryInterface<Exchange::IConnectionProperties>();
+                        displayInfoImplementation.Release();
+                        return connectionProperties;
+                }));
 #endif /*USE_THUNDER_R4 */
 
         EXPECT_CALL(*p_managerImplMock, Initialize())
