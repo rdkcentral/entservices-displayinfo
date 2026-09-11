@@ -30,7 +30,10 @@
 #include <mutex>
 #include <boost/filesystem.hpp>
 
+// Expose the nested notification delegate only in this L1 translation unit.
+#define private public
 #include "../../../plugin/DeviceSettings/PlatformImplementation.cpp"
+#undef private
 #include "DisplayInfo.h"
 #include "DisplayInfoMock.h"
 
@@ -1898,7 +1901,7 @@ TEST_F(DisplayInfoTestTest, EDID_ExceptionHandling)
  * This comprehensive notification test validates:
  * - Proper implementation of Thunder notification pattern following HdmiCecSource example
  * - IConnectionProperties::INotification interface usage for resolution change events
- * - Event triggering through IARM bus resolution change simulation
+ * - Event triggering through the DeviceSettings video-port notification delegate
  * - Notification callback execution and parameter validation
  * - COMRPC notification system integration with DisplayInfo plugin
  * - Threading and synchronization aspects of notification delivery
@@ -1983,6 +1986,11 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
 
+    Core::Sink<Plugin::DisplayInfoImplementation::DSVideoPortNotification> videoPortNotification(
+        *Plugin::DisplayInfoImplementation::_instance);
+    const Exchange::IDeviceSettingsVideoPort::ResolutionChange hdResolution = { 1920, 1080 };
+    const Exchange::IDeviceSettingsVideoPort::ResolutionChange uhdResolution = { 3840, 2160 };
+
     // Register our notification handler
     uint32_t result = connectionProperties->Register(&notification);
     EXPECT_EQ(result, Core::ERROR_NONE);
@@ -1991,8 +1999,8 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
     {
         notification.Reset();
 
-        // Trigger the resolution change event directly using the static function
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPreChange( 1920, 1080 );
+        // Trigger the DeviceSettings resolution change callback
+        videoPortNotification.OnResolutionPreChange(hdResolution);
 
         // Wait for notification with timeout
         bool eventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
@@ -2004,7 +2012,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         notification.Reset();
         
         // Trigger the resolution change event
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 3840, 2160 );
+        videoPortNotification.OnResolutionPostChange(uhdResolution);
 
         // Wait for notification with timeout
         bool eventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
@@ -2023,7 +2031,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         secondNotification.Reset();
 
         // Trigger event - both should receive it
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPreChange( 3840, 2160 );
+        videoPortNotification.OnResolutionPreChange(uhdResolution);
 
         // Both notifications should receive the event
         bool firstEventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
@@ -2046,7 +2054,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         notification.Reset();
 
         // Trigger event - should not be received
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPreChange( 3840, 2160 );
+        videoPortNotification.OnResolutionPreChange(uhdResolution);
 
         // Should timeout since no notification should be received
         bool eventReceived = notification.WaitForEvent(500, Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
