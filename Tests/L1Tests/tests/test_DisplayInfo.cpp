@@ -110,6 +110,9 @@ protected:
     DisplayInfoTestMocks::AudioMock* p_dsAudioMock = nullptr;
     DisplayInfoTestMocks::VideoDeviceMock* p_dsVideoDeviceMock = nullptr;
     DisplayInfoTestMocks::RootMock* p_dsRootMock = nullptr;
+    std::mutex deviceSettingsMutex;
+    std::condition_variable deviceSettingsCondition;
+    bool deviceSettingsInitialized = false;
 
     static std::vector<uint8_t> DetailedTimingEdid(
         uint16_t width, uint16_t height, uint16_t horizontalBlanking = 0,
@@ -126,69 +129,6 @@ protected:
         edid[61] = static_cast<uint8_t>(((height >> 8) << 4) | (verticalBlanking >> 8));
         edid[127] = 1;
         return edid;
-    }
-
-    void SeedDeviceSettingsState(Plugin::DisplayInfoImplementation* implementation)
-    {
-        ASSERT(implementation != nullptr);
-
-        const auto hdmiType = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI;
-        const auto hdmiAudioType = Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI;
-
-        implementation->_vpConfigStore.Clear();
-        implementation->_audioConfigStore.Clear();
-        implementation->_vdConfigStore.Clear();
-        implementation->_releaseSubInterfaceCache();
-        implementation->_defaultPortType = hdmiType;
-
-        Exchange::IDeviceSettingsVideoPort::VideoPortTypeConfig videoTypeConfig{};
-        videoTypeConfig.typeId = hdmiType;
-        videoTypeConfig.name = "HDMI";
-        videoTypeConfig.hdcpSupported = true;
-        videoTypeConfig.supportedResolutionNames = "1080p";
-        implementation->_vpConfigStore.typeConfigs.push_back(videoTypeConfig);
-
-        Exchange::IDeviceSettingsVideoPort::VideoPortPortConfig videoPortConfig{};
-        videoPortConfig.videoPortType = hdmiType;
-        videoPortConfig.videoPortIndex = 0;
-        videoPortConfig.connectedAudioPortType = hdmiAudioType;
-        videoPortConfig.connectedAudioPortIndex = 0;
-        videoPortConfig.defaultResolution = "1080p";
-        implementation->_vpConfigStore.portConfigs.push_back(videoPortConfig);
-
-        Exchange::IDeviceSettingsAudio::AudioPortConfigInfo audioPortConfig{};
-        audioPortConfig.audioPortType = hdmiAudioType;
-        audioPortConfig.audioPortIndex = 0;
-        audioPortConfig.connectedVideoPortType = hdmiType;
-        audioPortConfig.connectedVideoPortIndex = 0;
-        implementation->_audioConfigStore.portConfigs.push_back(audioPortConfig);
-
-        Exchange::IDeviceSettingsVideoDevice::VideoDeviceConfigInfo videoDeviceConfig{};
-        videoDeviceConfig.numSupportedDFCs = 1;
-        implementation->_vdConfigStore.deviceConfigs.push_back(videoDeviceConfig);
-        implementation->_videoPortHandles = {{ "HDMI0", 10 }};
-        implementation->_audioPortHandles = {{ "HDMI0", 30 }};
-        implementation->_displayHandles = {{ "HDMI0", 20 }};
-        implementation->_videoDeviceHandles = { 40 };
-        implementation->_displayHandle = 20;
-
-        p_dsVideoPortMock->AddRef();
-        implementation->_subInterfaceCache[Exchange::IDeviceSettingsVideoPort::ID] = {
-            static_cast<Core::IUnknown*>(p_dsVideoPortMock), p_dsVideoPortMock
-        };
-        p_dsDisplayMock->AddRef();
-        implementation->_subInterfaceCache[Exchange::IDeviceSettingsDisplay::ID] = {
-            static_cast<Core::IUnknown*>(p_dsDisplayMock), p_dsDisplayMock
-        };
-        p_dsAudioMock->AddRef();
-        implementation->_subInterfaceCache[Exchange::IDeviceSettingsAudio::ID] = {
-            static_cast<Core::IUnknown*>(p_dsAudioMock), p_dsAudioMock
-        };
-        p_dsVideoDeviceMock->AddRef();
-        implementation->_subInterfaceCache[Exchange::IDeviceSettingsVideoDevice::ID] = {
-            static_cast<Core::IUnknown*>(p_dsVideoDeviceMock), p_dsVideoDeviceMock
-        };
-        implementation->_configLoaded.store(true, std::memory_order_release);
     }
 
     DisplayInfoTest()
@@ -272,7 +212,16 @@ protected:
         ON_CALL(*p_dsVideoPortMock, IsVideoPortOutputHDR(::testing::_, ::testing::_))
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(false), ::testing::Return(Core::ERROR_NONE)));
         ON_CALL(*p_dsDisplayMock, GetDisplay(::testing::_, ::testing::_, ::testing::_))
-            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<2>(20), ::testing::Return(Core::ERROR_NONE)));
+            .WillByDefault(::testing::Invoke(
+                [this](Exchange::IDeviceSettingsDisplay::DisplayPortType, int32_t, int32_t& handle) {
+                    handle = 20;
+                    {
+                        std::lock_guard<std::mutex> lock(deviceSettingsMutex);
+                        deviceSettingsInitialized = true;
+                    }
+                    deviceSettingsCondition.notify_one();
+                    return Core::ERROR_NONE;
+                }));
         ON_CALL(*p_dsDisplayMock, GetDisplayEdidBytes(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke([](int32_t, uint8_t bytes[], uint16_t length) {
                 std::fill(bytes, bytes + length, 0);
@@ -292,70 +241,116 @@ protected:
         ON_CALL(*p_dsVideoPortMock, IsVideoPortDisplayConnected(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, bool& connected) {
-                    connected = p_videoOutputPortMock->isDisplayConnected();
-                    return Core::ERROR_NONE;
+                    try {
+                        connected = p_videoOutputPortMock->isDisplayConnected();
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        connected = false;
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetVideoPortResolution(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& value) {
-                    const auto& frameRate = p_videoResolutionMock->getFrameRate();
-                    if (frameRate == device::FrameRate::k23dot98) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_23_98;
-                    else if (frameRate == device::FrameRate::k24) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_24;
-                    else if (frameRate == device::FrameRate::k25) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_25;
-                    else if (frameRate == device::FrameRate::k29dot97) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_29_97;
-                    else if (frameRate == device::FrameRate::k30) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_30;
-                    else if (frameRate == device::FrameRate::k50) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_50;
-                    else if (frameRate == device::FrameRate::k59dot94) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_59_94;
-                    else if (frameRate == device::FrameRate::k60) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_60;
-                    else value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_MAX;
-                    return Core::ERROR_NONE;
+                    try {
+                        const auto& frameRate = p_videoOutputPortMock->getResolution().getFrameRate();
+                        if (frameRate == device::FrameRate::k23dot98) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_23_98;
+                        else if (frameRate == device::FrameRate::k24) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_24;
+                        else if (frameRate == device::FrameRate::k25) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_25;
+                        else if (frameRate == device::FrameRate::k29dot97) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_29_97;
+                        else if (frameRate == device::FrameRate::k30) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_30;
+                        else if (frameRate == device::FrameRate::k50) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_50;
+                        else if (frameRate == device::FrameRate::k59dot94) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_59_94;
+                        else if (frameRate == device::FrameRate::k60) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_60;
+                        else value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_MAX;
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetColorSpace(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::DisplayColorSpace& value) {
-                    value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayColorSpace>(p_videoOutputPortMock->getColorSpace());
-                    return Core::ERROR_NONE;
+                    try {
+                        value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayColorSpace>(p_videoOutputPortMock->getColorSpace());
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetColorDepth(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, uint32_t& value) {
-                    value = static_cast<uint32_t>(p_videoOutputPortMock->getColorDepth());
-                    return Core::ERROR_NONE;
+                    try {
+                        switch (p_videoOutputPortMock->getColorDepth()) {
+                        case 8: value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_COLORDEPTH_8BIT; break;
+                        case 10: value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_COLORDEPTH_10BIT; break;
+                        case 12: value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_COLORDEPTH_12BIT; break;
+                        default: value = 0; break;
+                        }
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetQuantizationRange(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::DisplayQuantizationRange& value) {
-                    value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayQuantizationRange>(p_videoOutputPortMock->getQuantizationRange());
-                    return Core::ERROR_NONE;
+                    try {
+                        value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayQuantizationRange>(p_videoOutputPortMock->getQuantizationRange());
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetVideoEOTF(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::HDRStandard& value) {
-                    value = static_cast<Exchange::IDeviceSettingsVideoPort::HDRStandard>(p_videoOutputPortMock->getVideoEOTF());
-                    return Core::ERROR_NONE;
+                    try {
+                        value = static_cast<Exchange::IDeviceSettingsVideoPort::HDRStandard>(p_videoOutputPortMock->getVideoEOTF());
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetMatrixCoefficients(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients& value) {
-                    value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(p_videoOutputPortMock->getMatrixCoefficients());
-                    return Core::ERROR_NONE;
+                    try {
+                        value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(p_videoOutputPortMock->getMatrixCoefficients());
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetTVHDRCapabilities(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, int32_t& value) {
-                    p_videoOutputPortMock->getTVHDRCapabilities(&value);
-                    return Core::ERROR_NONE;
+                    try {
+                        p_videoOutputPortMock->getTVHDRCapabilities(&value);
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        value = 0;
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsVideoPortMock, GetHDMIPreference(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::HDCPProtocolVersion& value) {
-                    value = static_cast<Exchange::IDeviceSettingsVideoPort::HDCPProtocolVersion>(p_videoOutputPortMock->GetHdmiPreference());
+                    try {
+                        value = static_cast<Exchange::IDeviceSettingsVideoPort::HDCPProtocolVersion>(p_videoOutputPortMock->GetHdmiPreference());
+                    } catch (...) {
+                        value = Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_MAX;
+                    }
                     return Core::ERROR_NONE;
                 }));
         ON_CALL(*p_dsVideoPortMock, SetHDMIPreference(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::HDCPProtocolVersion value) {
-                    p_videoOutputPortMock->SetHdmiPreference(static_cast<dsHdcpProtocolVersion_t>(value));
+                    try {
+                        p_videoOutputPortMock->SetHdmiPreference(static_cast<dsHdcpProtocolVersion_t>(value));
+                    } catch (...) {
+                    }
                     return Core::ERROR_NONE;
                 }));
         ON_CALL(*p_dsVideoPortMock, IsVideoPortOutputHDR(::testing::_, ::testing::_))
@@ -367,10 +362,25 @@ protected:
         ON_CALL(*p_dsAudioMock, GetStereoMode(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsAudio::StereoMode& value, bool) {
-                    value = p_audioOutputPortMock->getStereoMode(false) == device::AudioStereoMode::kPassThru
-                        ? Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH
-                        : Exchange::IDeviceSettingsAudio::AUDIO_STEREO_UNKNOWN;
-                    return Core::ERROR_NONE;
+                    try {
+                        value = p_audioOutputPortMock->getStereoMode(false) == device::AudioStereoMode::kPassThru
+                            ? Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH
+                            : Exchange::IDeviceSettingsAudio::AUDIO_STEREO_UNKNOWN;
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        return Core::ERROR_GENERAL;
+                    }
+                }));
+        ON_CALL(*p_dsVideoDeviceMock, GetHDRCapabilities(::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [this](int32_t, int32_t& value) {
+                    try {
+                        p_videoDeviceMock->getHDRCapabilities(&value);
+                        return Core::ERROR_NONE;
+                    } catch (...) {
+                        value = 0;
+                        return Core::ERROR_GENERAL;
+                    }
                 }));
         ON_CALL(*p_dsDisplayMock, GetDisplayEdidBytes(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
@@ -409,23 +419,27 @@ protected:
                     return &comLinkMock;
                 }));
 
-        ON_CALL(service, State())
-            .WillByDefault(::testing::Return(PluginHost::IShell::DEACTIVATED));
-        ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::StrEq("org.rdk.DeviceSettings")))
-            .WillByDefault(::testing::Return(nullptr));
+        ON_CALL(service, QueryInterface(Exchange::IDeviceSettings::ID))
+            .WillByDefault(::testing::Invoke([this](const uint32_t) -> void* {
+                p_dsRootMock->AddRef();
+                return static_cast<Exchange::IDeviceSettings*>(p_dsRootMock);
+            }));
+        ON_CALL(service, Register(::testing::Matcher<PluginHost::IPlugin::INotification*>(::testing::_)))
+            .WillByDefault(::testing::Invoke(
+                [this](PluginHost::IPlugin::INotification* notification) {
+                    notification->Activated("org.rdk.DeviceSettings", &service);
+                }));
 
 #ifdef USE_THUNDER_R4
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                     [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
-                        SeedDeviceSettingsState(displayInfoImplementation.operator->());
                         return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #else
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                     [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
-                    SeedDeviceSettingsState(displayInfoImplementation.operator->());
                         return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #endif /*USE_THUNDER_R4 */
@@ -441,19 +455,14 @@ protected:
         dispatcher->Activate(&service);
         plugin->Initialize(&service);
 
-        // Stop the asynchronous DeviceSettings monitor before seeding
-        // deterministic COM-RPC state for this fixture.
-        displayInfoImplementation->DSHelper::Close();
+        {
+            std::unique_lock<std::mutex> lock(deviceSettingsMutex);
+            EXPECT_TRUE(deviceSettingsCondition.wait_for(
+                lock, std::chrono::seconds(2), [this]() { return deviceSettingsInitialized; }));
+        }
 
         p_drmMock  = new NiceMock <DRMMock>;
         drmImpl::setImpl(p_drmMock);
-
-        auto* displayInfoImpl = displayInfoImplementation.operator->();
-        EXPECT_NE(displayInfoImpl, nullptr);
-        if (displayInfoImpl == nullptr) {
-            return;
-        }
-        SeedDeviceSettingsState(displayInfoImpl);
 
         ON_CALL(*p_connectionpropertiesMock, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
@@ -470,7 +479,6 @@ protected:
         dispatcher->Deactivate();
         dispatcher->Release();
 
-        displayInfoImplementation->_releaseSubInterfaceCache();
         displayInfoImplementation.Release();
 
         delete p_dsRootMock;
@@ -1254,7 +1262,14 @@ protected:
         ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
             .WillByDefault(::testing::Invoke(
                 [](std::vector<uint8_t>& edidVec) {
-                    edidVec = std::vector<uint8_t>(128, 0xAA); // Just a dummy EDID
+                    edidVec.assign(137, 0);
+                    edidVec[128] = 0x02; // CTA-861 extension
+                    edidVec[130] = 9;    // Data block collection ends at byte 137
+                    edidVec[132] = 0xE4; // Extended tag, payload length 4
+                    edidVec[133] = 0x05; // Colorimetry extended tag
+                    edidVec[134] = 0xFF; // All colorimetry bits
+                    edidVec[135] = 0x80; // DCI-P3 metadata bit
+                    edidVec[136] = 0x01;
                 }));
     
         // Mock EDID_Verify to succeed
