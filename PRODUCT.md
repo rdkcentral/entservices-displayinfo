@@ -2,7 +2,7 @@
 
 ## Product Description
 
-The DisplayInfo plugin is a Thunder/WPEFramework service that provides comprehensive, real-time information about display hardware capabilities, connection status, and graphics properties for RDK-based entertainment and media devices. It serves as the authoritative source for display-related information across the RDK software stack.
+The DisplayInfo plugin is a Thunder service that provides comprehensive, real-time information about display hardware capabilities, connection status, and graphics properties for RDK-based entertainment and media devices. It serves as the authoritative source for display-related information across the RDK software stack.
 
 ## Key Features
 

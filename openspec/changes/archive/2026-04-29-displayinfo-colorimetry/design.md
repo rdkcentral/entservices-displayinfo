@@ -1,6 +1,6 @@
 ## Context
 
-The `DisplayInfo` plugin aggregates four C++ interfaces (`IGraphicsProperties`, `IConnectionProperties`, `IHDRProperties`, `IDisplayProperties`) into a single WPEFramework JSON-RPC service. `IDisplayProperties` — which includes `Colorimetry()` — is already registered at runtime via `Exchange::JDisplayProperties::Register(*this, _displayProperties)` in `DisplayInfo::Initialize`. This means the JSON-RPC auto-binding for `colorimetry` is already wired; the implementation exists in the DeviceSettings backend, and the spec is simply missing.
+The `DisplayInfo` plugin aggregates four C++ interfaces (`IGraphicsProperties`, `IConnectionProperties`, `IHDRProperties`, `IDisplayProperties`) into a single Thunder JSON-RPC service. `IDisplayProperties` — which includes `Colorimetry()` — is already registered at runtime via `Exchange::JDisplayProperties::Register(*this, _displayProperties)` in `DisplayInfo::Initialize`. This means the JSON-RPC auto-binding for `colorimetry` is already wired; the implementation exists in the DeviceSettings backend, and the spec is simply missing.
 
 The gap is a combination of:
 1. **Behaviour contract missing**: No spec defines the expected return value when no display is connected. The DeviceSettings backend currently returns `ERROR_GENERAL` in that case (should be `ERROR_NONE` with empty iterator).

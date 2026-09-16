@@ -1,6 +1,6 @@
 ## Context
 
-The `DisplayInfo` plugin aggregates four C++ interfaces (`IGraphicsProperties`, `IConnectionProperties`, `IHDRProperties`, `IDisplayProperties`) into a single WPEFramework JSON-RPC service. `IDisplayProperties` already provides the iterator-based `Colorimetry()` method (added in the prior `2026-04-29-displayinfo-colorimetry` change) which returns the **set** of colorimetry modes supported by the display EDID.
+The `DisplayInfo` plugin aggregates four C++ interfaces (`IGraphicsProperties`, `IConnectionProperties`, `IHDRProperties`, `IDisplayProperties`) into a single Thunder JSON-RPC service. `IDisplayProperties` already provides the iterator-based `Colorimetry()` method (added in the prior `2026-04-29-displayinfo-colorimetry` change) which returns the **set** of colorimetry modes supported by the display EDID.
 
 However, no property currently exposes the **single active/current colorimetry** standard on the HDMI output link. The DeviceSettings library exposes this via `device::VideoOutputPort::getMatrixCoefficients()`, which returns a `dsDisplayMatrixCoefficients_t` scalar. The Thunder interface `Exchange::IDisplayProperties` does not yet have a `CurrentColorimetry()` method, and no JSON-RPC binding exists for it.
 

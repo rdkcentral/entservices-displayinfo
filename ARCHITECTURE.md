@@ -2,7 +2,7 @@
 
 ## Overview
 
-The DisplayInfo plugin is a Thunder/WPEFramework service that provides comprehensive display and graphics hardware information for RDK-based devices. It exposes display capabilities, connection properties, HDR support, and graphics properties through a standardized JSON-RPC API interface.
+The DisplayInfo plugin is a Thunder service that provides comprehensive display and graphics hardware information for RDK-based devices. It exposes display capabilities, connection properties, HDR support, and graphics properties through a standardized JSON-RPC API interface.
 
 ## System Architecture
 
@@ -12,7 +12,7 @@ The DisplayInfo plugin follows a modular architecture with platform-specific abs
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│           Thunder Framework (WPEFramework)              │
+│                 Thunder Framework              │
 │  ┌──────────────────────────────────────────────────┐   │
 │  │         DisplayInfo Plugin Service               │   │
 │  │  ┌────────────────────────────────────────────┐  │   │
@@ -159,7 +159,7 @@ Communication uses Thunder RPC with automatic proxy/stub generation.
 
 ### Build-Time Dependencies
 
-- **Thunder Framework** (WPEFramework): Core plugin infrastructure
+- **Thunder Framework** (Thunder): Core plugin infrastructure
 - **Thunder Plugins**: Plugin base classes and utilities  
 - **Thunder Definitions**: Interface definitions (IGraphicsProperties, etc.)
 - **Thunder APIs**: JSON data structures

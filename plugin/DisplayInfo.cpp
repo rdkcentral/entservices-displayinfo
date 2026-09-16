@@ -23,7 +23,7 @@
 #define API_VERSION_NUMBER_MINOR 0
 #define API_VERSION_NUMBER_PATCH 6
 
-namespace WPEFramework {
+namespace Thunder {
 namespace {
     static Plugin::Metadata<Plugin::DisplayInfo> metadata(
         // Version (Major, Minor, Patch)
@@ -254,4 +254,4 @@ namespace Plugin {
     }
 
 } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

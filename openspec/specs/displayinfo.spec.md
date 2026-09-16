@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **DisplayInfo** plugin is a WPEFramework (Thunder) plugin that exposes display and graphics
+The **DisplayInfo** plugin is a Thunder plugin that exposes display and graphics
 capabilities of the host device over JSON-RPC. It abstracts four hardware backends
 (RDK DeviceSettings, Linux DRM/KMS, Broadcom VideoCore/BCM, and Nexus) behind a single
 versioned API surface and fires events when the display connection state changes.
@@ -11,7 +11,7 @@ versioned API surface and fires events when the display connection state changes
 
 ## Description
 
-`DisplayInfo` runs as a WPEFramework plugin and optionally in its own out-of-process (OOP)
+`DisplayInfo` runs as a Thunder plugin and optionally in its own out-of-process (OOP)
 container. It is responsible for:
 
 - Reporting GPU memory statistics (total and free).
@@ -84,7 +84,7 @@ subsystem is ready.
 
 ```
   ┌──────────────────────────────────────────────────────────────┐
-  │  WPEFramework / Thunder Host Process                         │
+  │                   Thunder Host Process                       │
   │                                                              │
   │  ┌────────────────────────────────────────────────────────┐  │
   │  │  Plugin::DisplayInfo                                   │  │
@@ -692,16 +692,16 @@ Configuration is injected via `IShell::ConfigLine()` and parsed per platform.
   in DeviceSettings backend. Results are not cached — callers should cache if latency is
   critical.
 - **Event delivery:** Udev netlink socket (Linux) or IARM callback (DeviceSettings) to
-  WPEFramework worker pool. No additional processing thread — bounded latency.
+  Thunder worker pool. No additional processing thread — bounded latency.
 
 ---
 
 ## Security
 
 - **IPC boundary:** The OOP container communicates with the in-process plugin exclusively via
-  WPEFramework RPC (COM-RPC) — no external network surface.
+  Thunder RPC (COM-RPC) — no external network surface.
 - **HDCP setter:** HDCPProtection write access is unrestricted at the plugin layer. Deployments
-  should use WPEFramework access-control lists (ACL) to limit which callers may invoke the
+  should use Thunder access-control lists (ACL) to limit which callers may invoke the
   setter JSON-RPC path.
 - **EDID data:** Raw EDID bytes are returned as-is from the display. Clients must not treat
   EDID data as trusted input without validation.
@@ -971,7 +971,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 
 ## References
 
-- WPEFramework plugin development guide (internal)
+- Thunder plugin development guide (internal)
 - `interfaces/IDisplayInfo.h`, `interfaces/json/JsonData_DisplayInfo.h`
 - `interfaces/json/JConnectionProperties.h`, `JGraphicsProperties.h`, `JHDRProperties.h`, `JDisplayProperties.h`
 - HDMI HDCP specification (HDCP 1.4 / 2.2 / 2.3)

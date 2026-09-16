@@ -40,7 +40,7 @@
 #define EDID_MAX_HORIZONTAL_SIZE 21
 #define EDID_MAX_VERTICAL_SIZE   22
 
-namespace WPEFramework {
+namespace Thunder {
 namespace Plugin {
 
 class DisplayInfoImplementation :

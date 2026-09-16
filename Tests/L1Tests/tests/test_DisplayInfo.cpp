@@ -68,7 +68,7 @@
 #include <boost/filesystem.hpp>
 #include "ThunderPortability.h"
 
-using namespace WPEFramework;
+using namespace Thunder;
 
 using ::testing::NiceMock;
 
