@@ -335,9 +335,6 @@ public:
             return Core::ERROR_UNAVAILABLE;
         }
 
-        // isAudioOutputPortConnected() fills audioHandle from the cache AND
-        // verifies the port is physically connected (HDMI: display present,
-        // ARC: HDMI-In status, HEADPHONE: IsAudioOutputConnected, others: always true).
         int32_t audioHandle = INVALID_DS_HANDLE;
         if (!const_cast<DisplayInfoImplementation*>(this)->isAudioOutputPortConnected(
                 audio, audioPortName, audioHandle)) {
@@ -354,7 +351,7 @@ public:
             value = (mode == Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH);
         }
         audio->Release();
-        return rc;
+        return Core::ERROR_NONE;
     }
 
     Core::hresult Connected(bool& connected) const override
