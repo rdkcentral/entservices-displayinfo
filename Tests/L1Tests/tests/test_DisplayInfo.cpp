@@ -350,6 +350,47 @@ protected:
         p_videoDeviceMock = new NiceMock <VideoDeviceMock>;
         device::VideoDevice::setImpl(p_videoDeviceMock);
 
+        auto* displayInfoImpl = Plugin::DisplayInfoImplementation::_instance;
+        EXPECT_NE(displayInfoImpl, nullptr);
+        if (displayInfoImpl == nullptr) {
+            return;
+        }
+        displayInfoImpl->_defaultPortType = VideoPortType::DS_VIDEO_PORT_TYPE_HDMI;
+        displayInfoImpl->_vpConfigStore.typeConfigs = {
+            { VideoPortType::DS_VIDEO_PORT_TYPE_HDMI, "HDMI", false, true, 0, "1080p" }
+        };
+        displayInfoImpl->_vpConfigStore.portConfigs = {
+            { VideoPortType::DS_VIDEO_PORT_TYPE_HDMI, 0,
+              static_cast<int32_t>(AudioPortType::AUDIO_PORT_TYPE_HDMI), 0, "1080p" }
+        };
+        displayInfoImpl->_audioConfigStore.portConfigs = {
+            { AudioPortType::AUDIO_PORT_TYPE_HDMI, 0,
+              static_cast<int32_t>(VideoPortType::DS_VIDEO_PORT_TYPE_HDMI), 0 }
+        };
+        displayInfoImpl->_vdConfigStore.deviceConfigs = {{ 1, 0, 0 }};
+        displayInfoImpl->_videoPortHandles["HDMI0"] = 10;
+        displayInfoImpl->_audioPortHandles["HDMI0"] = 30;
+        displayInfoImpl->_displayHandles["HDMI0"] = 20;
+        displayInfoImpl->_videoDeviceHandles = { 40 };
+        displayInfoImpl->_configLoaded.store(true, std::memory_order_release);
+
+        p_dsVideoPortMock->AddRef();
+        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsVideoPort::ID] = {
+            static_cast<Core::IUnknown*>(p_dsVideoPortMock), p_dsVideoPortMock
+        };
+        p_dsDisplayMock->AddRef();
+        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsDisplay::ID] = {
+            static_cast<Core::IUnknown*>(p_dsDisplayMock), p_dsDisplayMock
+        };
+        p_dsAudioMock->AddRef();
+        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsAudio::ID] = {
+            static_cast<Core::IUnknown*>(p_dsAudioMock), p_dsAudioMock
+        };
+        p_dsVideoDeviceMock->AddRef();
+        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsVideoDevice::ID] = {
+            static_cast<Core::IUnknown*>(p_dsVideoDeviceMock), p_dsVideoDeviceMock
+        };
+
         ON_CALL(*p_connectionpropertiesMock, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
                 [&](Exchange::IConnectionProperties::INotification* notification) {
