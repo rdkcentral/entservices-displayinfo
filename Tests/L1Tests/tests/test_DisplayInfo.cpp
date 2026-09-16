@@ -111,6 +111,86 @@ protected:
     DisplayInfoTestMocks::VideoDeviceMock* p_dsVideoDeviceMock = nullptr;
     DisplayInfoTestMocks::RootMock* p_dsRootMock = nullptr;
 
+    static std::vector<uint8_t> DetailedTimingEdid(
+        uint16_t width, uint16_t height, uint16_t horizontalBlanking = 0,
+        uint16_t verticalBlanking = 0, uint16_t pixelClock10Khz = 0)
+    {
+        std::vector<uint8_t> edid(128, 0);
+        edid[54] = static_cast<uint8_t>(pixelClock10Khz & 0xFF);
+        edid[55] = static_cast<uint8_t>(pixelClock10Khz >> 8);
+        edid[56] = static_cast<uint8_t>(width & 0xFF);
+        edid[57] = static_cast<uint8_t>(horizontalBlanking & 0xFF);
+        edid[58] = static_cast<uint8_t>(((width >> 8) << 4) | (horizontalBlanking >> 8));
+        edid[59] = static_cast<uint8_t>(height & 0xFF);
+        edid[60] = static_cast<uint8_t>(verticalBlanking & 0xFF);
+        edid[61] = static_cast<uint8_t>(((height >> 8) << 4) | (verticalBlanking >> 8));
+        edid[127] = 1;
+        return edid;
+    }
+
+    void SeedDeviceSettingsState(Plugin::DisplayInfoImplementation* implementation)
+    {
+        ASSERT(implementation != nullptr);
+
+        const auto hdmiType = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI;
+        const auto hdmiAudioType = Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI;
+
+        implementation->_vpConfigStore.Clear();
+        implementation->_audioConfigStore.Clear();
+        implementation->_vdConfigStore.Clear();
+        implementation->_releaseSubInterfaceCache();
+        implementation->_defaultPortType = hdmiType;
+
+        Exchange::IDeviceSettingsVideoPort::VideoPortTypeConfig videoTypeConfig{};
+        videoTypeConfig.typeId = hdmiType;
+        videoTypeConfig.name = "HDMI";
+        videoTypeConfig.hdcpSupported = true;
+        videoTypeConfig.supportedResolutionNames = "1080p";
+        implementation->_vpConfigStore.typeConfigs.push_back(videoTypeConfig);
+
+        Exchange::IDeviceSettingsVideoPort::VideoPortPortConfig videoPortConfig{};
+        videoPortConfig.videoPortType = hdmiType;
+        videoPortConfig.videoPortIndex = 0;
+        videoPortConfig.connectedAudioPortType = hdmiAudioType;
+        videoPortConfig.connectedAudioPortIndex = 0;
+        videoPortConfig.defaultResolution = "1080p";
+        implementation->_vpConfigStore.portConfigs.push_back(videoPortConfig);
+
+        Exchange::IDeviceSettingsAudio::AudioPortConfigInfo audioPortConfig{};
+        audioPortConfig.audioPortType = hdmiAudioType;
+        audioPortConfig.audioPortIndex = 0;
+        audioPortConfig.connectedVideoPortType = hdmiType;
+        audioPortConfig.connectedVideoPortIndex = 0;
+        implementation->_audioConfigStore.portConfigs.push_back(audioPortConfig);
+
+        Exchange::IDeviceSettingsVideoDevice::VideoDeviceConfigInfo videoDeviceConfig{};
+        videoDeviceConfig.numSupportedDFCs = 1;
+        implementation->_vdConfigStore.deviceConfigs.push_back(videoDeviceConfig);
+        implementation->_videoPortHandles = {{ "HDMI0", 10 }};
+        implementation->_audioPortHandles = {{ "HDMI0", 30 }};
+        implementation->_displayHandles = {{ "HDMI0", 20 }};
+        implementation->_videoDeviceHandles = { 40 };
+        implementation->_displayHandle = 20;
+
+        p_dsVideoPortMock->AddRef();
+        implementation->_subInterfaceCache[Exchange::IDeviceSettingsVideoPort::ID] = {
+            static_cast<Core::IUnknown*>(p_dsVideoPortMock), p_dsVideoPortMock
+        };
+        p_dsDisplayMock->AddRef();
+        implementation->_subInterfaceCache[Exchange::IDeviceSettingsDisplay::ID] = {
+            static_cast<Core::IUnknown*>(p_dsDisplayMock), p_dsDisplayMock
+        };
+        p_dsAudioMock->AddRef();
+        implementation->_subInterfaceCache[Exchange::IDeviceSettingsAudio::ID] = {
+            static_cast<Core::IUnknown*>(p_dsAudioMock), p_dsAudioMock
+        };
+        p_dsVideoDeviceMock->AddRef();
+        implementation->_subInterfaceCache[Exchange::IDeviceSettingsVideoDevice::ID] = {
+            static_cast<Core::IUnknown*>(p_dsVideoDeviceMock), p_dsVideoDeviceMock
+        };
+        implementation->_configLoaded.store(true, std::memory_order_release);
+    }
+
     DisplayInfoTest()
     : plugin(Core::ProxyType<Plugin::DisplayInfo>::Create())
     , displayInfoImplementation(Core::ProxyType<Plugin::DisplayInfoImplementation>::Create())
@@ -213,6 +293,21 @@ protected:
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, bool& connected) {
                     connected = p_videoOutputPortMock->isDisplayConnected();
+                    return Core::ERROR_NONE;
+                }));
+        ON_CALL(*p_dsVideoPortMock, GetVideoPortResolution(::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [this](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& value) {
+                    const auto& frameRate = p_videoResolutionMock->getFrameRate();
+                    if (frameRate == device::FrameRate::k23dot98) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_23_98;
+                    else if (frameRate == device::FrameRate::k24) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_24;
+                    else if (frameRate == device::FrameRate::k25) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_25;
+                    else if (frameRate == device::FrameRate::k29dot97) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_29_97;
+                    else if (frameRate == device::FrameRate::k30) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_30;
+                    else if (frameRate == device::FrameRate::k50) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_50;
+                    else if (frameRate == device::FrameRate::k59dot94) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_59_94;
+                    else if (frameRate == device::FrameRate::k60) value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_60;
+                    else value.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_MAX;
                     return Core::ERROR_NONE;
                 }));
         ON_CALL(*p_dsVideoPortMock, GetColorSpace(::testing::_, ::testing::_))
@@ -323,12 +418,14 @@ protected:
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                     [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
+                        SeedDeviceSettingsState(displayInfoImplementation.operator->());
                         return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #else
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                     [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
+                    SeedDeviceSettingsState(displayInfoImplementation.operator->());
                         return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #endif /*USE_THUNDER_R4 */
@@ -356,57 +453,7 @@ protected:
         if (displayInfoImpl == nullptr) {
             return;
         }
-        const auto hdmiType = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI;
-        const auto hdmiAudioType = Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI;
-        displayInfoImpl->_defaultPortType = hdmiType;
-
-        Exchange::IDeviceSettingsVideoPort::VideoPortTypeConfig videoTypeConfig{};
-        videoTypeConfig.typeId = hdmiType;
-        videoTypeConfig.name = "HDMI";
-        videoTypeConfig.hdcpSupported = true;
-        videoTypeConfig.supportedResolutionNames = "1080p";
-        displayInfoImpl->_vpConfigStore.typeConfigs.push_back(videoTypeConfig);
-
-        Exchange::IDeviceSettingsVideoPort::VideoPortPortConfig videoPortConfig{};
-        videoPortConfig.videoPortType = hdmiType;
-        videoPortConfig.videoPortIndex = 0;
-        videoPortConfig.connectedAudioPortType = hdmiAudioType;
-        videoPortConfig.connectedAudioPortIndex = 0;
-        videoPortConfig.defaultResolution = "1080p";
-        displayInfoImpl->_vpConfigStore.portConfigs.push_back(videoPortConfig);
-
-        Exchange::IDeviceSettingsAudio::AudioPortConfigInfo audioPortConfig{};
-        audioPortConfig.audioPortType = hdmiAudioType;
-        audioPortConfig.audioPortIndex = 0;
-        audioPortConfig.connectedVideoPortType = hdmiType;
-        audioPortConfig.connectedVideoPortIndex = 0;
-        displayInfoImpl->_audioConfigStore.portConfigs.push_back(audioPortConfig);
-
-        Exchange::IDeviceSettingsVideoDevice::VideoDeviceConfigInfo videoDeviceConfig{};
-        videoDeviceConfig.numSupportedDFCs = 1;
-        displayInfoImpl->_vdConfigStore.deviceConfigs.push_back(videoDeviceConfig);
-        displayInfoImpl->_videoPortHandles["HDMI0"] = 10;
-        displayInfoImpl->_audioPortHandles["HDMI0"] = 30;
-        displayInfoImpl->_displayHandles["HDMI0"] = 20;
-        displayInfoImpl->_videoDeviceHandles = { 40 };
-        displayInfoImpl->_configLoaded.store(true, std::memory_order_release);
-
-        p_dsVideoPortMock->AddRef();
-        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsVideoPort::ID] = {
-            static_cast<Core::IUnknown*>(p_dsVideoPortMock), p_dsVideoPortMock
-        };
-        p_dsDisplayMock->AddRef();
-        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsDisplay::ID] = {
-            static_cast<Core::IUnknown*>(p_dsDisplayMock), p_dsDisplayMock
-        };
-        p_dsAudioMock->AddRef();
-        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsAudio::ID] = {
-            static_cast<Core::IUnknown*>(p_dsAudioMock), p_dsAudioMock
-        };
-        p_dsVideoDeviceMock->AddRef();
-        displayInfoImpl->_subInterfaceCache[Exchange::IDeviceSettingsVideoDevice::ID] = {
-            static_cast<Core::IUnknown*>(p_dsVideoDeviceMock), p_dsVideoDeviceMock
-        };
+        SeedDeviceSettingsState(displayInfoImpl);
 
         ON_CALL(*p_connectionpropertiesMock, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
@@ -423,6 +470,7 @@ protected:
         dispatcher->Deactivate();
         dispatcher->Release();
 
+        displayInfoImplementation->_releaseSubInterfaceCache();
         displayInfoImplementation.Release();
 
         delete p_dsRootMock;
@@ -723,8 +771,8 @@ protected:
 
         ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
             .WillByDefault(::testing::Invoke(
-                [&](std::vector<uint8_t> &edidVec2) {
-                    edidVec2 = std::vector<uint8_t>({ 't', 'e', 's', 't' });
+                [](std::vector<uint8_t>& edidVec) {
+                    edidVec = DisplayInfoTest::DetailedTimingEdid(70, 35);
                 }));
 
         ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_,::testing::_))
@@ -800,8 +848,8 @@ protected:
 
         ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
             .WillByDefault(::testing::Invoke(
-                [&](std::vector<uint8_t> &edidVec2) {
-                    edidVec2 = std::vector<uint8_t>({ 't', 'e', 's', 't' });
+                [](std::vector<uint8_t>& edidVec) {
+                    edidVec = DisplayInfoTest::DetailedTimingEdid(100, 100, 100, 400, 600);
                 }));
                 
         ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_,::testing::_))
