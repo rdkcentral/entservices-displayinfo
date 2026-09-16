@@ -141,8 +141,6 @@ public:
     MOCK_METHOD(Core::hresult, IsAudioMS12Decoded, (int32_t, bool&), (override));
     MOCK_METHOD(Core::hresult, GetAudioLEConfig, (int32_t, bool&), (override));
     MOCK_METHOD(Core::hresult, EnableAudioLEConfig, (int32_t, bool), (override));
-    MOCK_METHOD(Core::hresult, SetApplicationAudioConfig, (int32_t, const string&, bool), (override));
-    MOCK_METHOD(Core::hresult, GetApplicationAudioConfig, (int32_t, const string&, bool&), (override));
     MOCK_METHOD(Core::hresult, SetAudioDelay, (int32_t, uint32_t), (override));
     MOCK_METHOD(Core::hresult, GetAudioDelay, (int32_t, uint32_t&), (override));
     MOCK_METHOD(Core::hresult, SetAudioDelayOffset, (int32_t, uint32_t), (override));
