@@ -344,6 +344,10 @@ protected:
         dispatcher->Activate(&service);
         plugin->Initialize(&service);
 
+        // Stop the asynchronous DeviceSettings monitor before seeding
+        // deterministic COM-RPC state for this fixture.
+        displayInfoImplementation->DSHelper::Close();
+
         p_drmMock  = new NiceMock <DRMMock>;
         drmImpl::setImpl(p_drmMock);
 
