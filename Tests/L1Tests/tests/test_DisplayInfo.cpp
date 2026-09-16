@@ -86,6 +86,7 @@ protected:
     ManagerImplMock   *p_managerImplMock = nullptr ;
     ConnectionPropertiesMock* p_connectionpropertiesMock = nullptr;
     Core::ProxyType<WorkerPoolImplementation> workerPool;
+    bool workerPoolAssigned = false;
     NiceMock<FactoriesImplementation> factoriesImplementation;
     ServiceMock  *p_serviceMock  = nullptr;
     WrapsImplMock* p_wrapsImplMock = nullptr;
@@ -129,6 +130,11 @@ protected:
 
         p_edidParserMock  = new NiceMock <EdidParserMock>;
         edid_parser::edidParserImpl::setImpl(p_edidParserMock);
+
+        if (!Core::IWorkerPool::IsAvailable()) {
+            Core::IWorkerPool::Assign(&(*workerPool));
+            workerPoolAssigned = true;
+        }
 
         ON_CALL(service, COMLink())
         .WillByDefault(::testing::Invoke(
@@ -193,6 +199,11 @@ protected:
         plugin->Deinitialize(&service);
         dispatcher->Deactivate();
         dispatcher->Release();
+
+        if (workerPoolAssigned) {
+            Core::IWorkerPool::Assign(nullptr);
+            workerPoolAssigned = false;
+        }
         
 
         if (p_serviceMock != nullptr)
