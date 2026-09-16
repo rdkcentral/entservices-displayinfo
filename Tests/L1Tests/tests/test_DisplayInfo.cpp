@@ -355,19 +355,35 @@ protected:
         if (displayInfoImpl == nullptr) {
             return;
         }
-        displayInfoImpl->_defaultPortType = VideoPortType::DS_VIDEO_PORT_TYPE_HDMI;
-        displayInfoImpl->_vpConfigStore.typeConfigs = {
-            { VideoPortType::DS_VIDEO_PORT_TYPE_HDMI, "HDMI", false, true, 0, "1080p" }
-        };
-        displayInfoImpl->_vpConfigStore.portConfigs = {
-            { VideoPortType::DS_VIDEO_PORT_TYPE_HDMI, 0,
-              static_cast<int32_t>(AudioPortType::AUDIO_PORT_TYPE_HDMI), 0, "1080p" }
-        };
-        displayInfoImpl->_audioConfigStore.portConfigs = {
-            { AudioPortType::AUDIO_PORT_TYPE_HDMI, 0,
-              static_cast<int32_t>(VideoPortType::DS_VIDEO_PORT_TYPE_HDMI), 0 }
-        };
-        displayInfoImpl->_vdConfigStore.deviceConfigs = {{ 1, 0, 0 }};
+            const auto hdmiType = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI;
+            const auto hdmiAudioType = Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI;
+            displayInfoImpl->_defaultPortType = hdmiType;
+
+            Exchange::IDeviceSettingsVideoPort::VideoPortTypeConfig videoTypeConfig{};
+            videoTypeConfig.typeId = hdmiType;
+            videoTypeConfig.name = "HDMI";
+            videoTypeConfig.hdcpSupported = true;
+            videoTypeConfig.supportedResolutionNames = "1080p";
+            displayInfoImpl->_vpConfigStore.typeConfigs.push_back(videoTypeConfig);
+
+            Exchange::IDeviceSettingsVideoPort::VideoPortPortConfig videoPortConfig{};
+            videoPortConfig.videoPortType = hdmiType;
+            videoPortConfig.videoPortIndex = 0;
+            videoPortConfig.connectedAudioPortType = hdmiAudioType;
+            videoPortConfig.connectedAudioPortIndex = 0;
+            videoPortConfig.defaultResolution = "1080p";
+            displayInfoImpl->_vpConfigStore.portConfigs.push_back(videoPortConfig);
+
+            Exchange::IDeviceSettingsAudio::AudioPortConfigInfo audioPortConfig{};
+            audioPortConfig.audioPortType = hdmiAudioType;
+            audioPortConfig.audioPortIndex = 0;
+            audioPortConfig.connectedVideoPortType = hdmiType;
+            audioPortConfig.connectedVideoPortIndex = 0;
+            displayInfoImpl->_audioConfigStore.portConfigs.push_back(audioPortConfig);
+
+            Exchange::IDeviceSettingsVideoDevice::VideoDeviceConfigInfo videoDeviceConfig{};
+            videoDeviceConfig.numSupportedDFCs = 1;
+            displayInfoImpl->_vdConfigStore.deviceConfigs.push_back(videoDeviceConfig);
         displayInfoImpl->_videoPortHandles["HDMI0"] = 10;
         displayInfoImpl->_audioPortHandles["HDMI0"] = 30;
         displayInfoImpl->_displayHandles["HDMI0"] = 20;
