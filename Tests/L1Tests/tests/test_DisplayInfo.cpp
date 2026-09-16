@@ -81,6 +81,7 @@ using ::testing::NiceMock;
 class DisplayInfoTest : public ::testing::Test {
 protected:
     Core::ProxyType<Plugin::DisplayInfo> plugin;
+    Core::ProxyType<Plugin::DisplayInfoImplementation> displayInfoImplementation;
     Core::JSONRPC::Handler& handler;
     DECL_CORE_JSONRPC_CONX connection;
     NiceMock<ServiceMock> service;
@@ -112,6 +113,7 @@ protected:
 
     DisplayInfoTest()
     : plugin(Core::ProxyType<Plugin::DisplayInfo>::Create())
+    , displayInfoImplementation(Core::ProxyType<Plugin::DisplayInfoImplementation>::Create())
     , handler(*(plugin))
     , INIT_CONX(1, 0)
     , workerPool(Core::ProxyType<WorkerPoolImplementation>::Create(
@@ -125,6 +127,18 @@ protected:
         p_serviceMock = new NiceMock <ServiceMock>;
 
         p_connectionpropertiesMock  = new NiceMock <ConnectionPropertiesMock>;
+
+        p_audioOutputPortMock = new NiceMock<AudioOutputPortMock>;
+        device::AudioOutputPort::setImpl(p_audioOutputPortMock);
+
+        p_videoResolutionMock = new NiceMock<VideoResolutionMock>;
+        device::VideoResolution::setImpl(p_videoResolutionMock);
+
+        p_videoOutputPortMock = new NiceMock<VideoOutputPortMock>;
+        device::VideoOutputPort::setImpl(p_videoOutputPortMock);
+
+        p_videoDeviceMock = new NiceMock<VideoDeviceMock>;
+        device::VideoDevice::setImpl(p_videoDeviceMock);
 
         p_dsVideoPortMock = new NiceMock<DisplayInfoTestMocks::VideoPortMock>;
         p_dsDisplayMock = new NiceMock<DisplayInfoTestMocks::DisplayMock>;
@@ -313,14 +327,14 @@ protected:
 #ifdef USE_THUNDER_R4
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                    [](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
-                        return Core::Service<Plugin::DisplayInfoImplementation>::Create<Exchange::IConnectionProperties>();
+                    [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
+                        return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #else
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                    [](const RPC::Object& /* object */, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
-                        return Core::Service<Plugin::DisplayInfoImplementation>::Create<Exchange::IConnectionProperties>();
+                    [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
+                        return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #endif /*USE_THUNDER_R4 */
 
@@ -338,52 +352,40 @@ protected:
         p_drmMock  = new NiceMock <DRMMock>;
         drmImpl::setImpl(p_drmMock);
 
-        p_audioOutputPortMock  = new NiceMock <AudioOutputPortMock>;
-        device::AudioOutputPort::setImpl(p_audioOutputPortMock);
-
-        p_videoResolutionMock  = new NiceMock <VideoResolutionMock>;
-        device::VideoResolution::setImpl(p_videoResolutionMock);
-
-        p_videoOutputPortMock  = new NiceMock <VideoOutputPortMock>;
-        device::VideoOutputPort::setImpl(p_videoOutputPortMock);
-
-        p_videoDeviceMock = new NiceMock <VideoDeviceMock>;
-        device::VideoDevice::setImpl(p_videoDeviceMock);
-
-        auto* displayInfoImpl = Plugin::DisplayInfoImplementation::_instance;
+        auto* displayInfoImpl = displayInfoImplementation.operator->();
         EXPECT_NE(displayInfoImpl, nullptr);
         if (displayInfoImpl == nullptr) {
             return;
         }
-            const auto hdmiType = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI;
-            const auto hdmiAudioType = Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI;
-            displayInfoImpl->_defaultPortType = hdmiType;
+        const auto hdmiType = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI;
+        const auto hdmiAudioType = Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI;
+        displayInfoImpl->_defaultPortType = hdmiType;
 
-            Exchange::IDeviceSettingsVideoPort::VideoPortTypeConfig videoTypeConfig{};
-            videoTypeConfig.typeId = hdmiType;
-            videoTypeConfig.name = "HDMI";
-            videoTypeConfig.hdcpSupported = true;
-            videoTypeConfig.supportedResolutionNames = "1080p";
-            displayInfoImpl->_vpConfigStore.typeConfigs.push_back(videoTypeConfig);
+        Exchange::IDeviceSettingsVideoPort::VideoPortTypeConfig videoTypeConfig{};
+        videoTypeConfig.typeId = hdmiType;
+        videoTypeConfig.name = "HDMI";
+        videoTypeConfig.hdcpSupported = true;
+        videoTypeConfig.supportedResolutionNames = "1080p";
+        displayInfoImpl->_vpConfigStore.typeConfigs.push_back(videoTypeConfig);
 
-            Exchange::IDeviceSettingsVideoPort::VideoPortPortConfig videoPortConfig{};
-            videoPortConfig.videoPortType = hdmiType;
-            videoPortConfig.videoPortIndex = 0;
-            videoPortConfig.connectedAudioPortType = hdmiAudioType;
-            videoPortConfig.connectedAudioPortIndex = 0;
-            videoPortConfig.defaultResolution = "1080p";
-            displayInfoImpl->_vpConfigStore.portConfigs.push_back(videoPortConfig);
+        Exchange::IDeviceSettingsVideoPort::VideoPortPortConfig videoPortConfig{};
+        videoPortConfig.videoPortType = hdmiType;
+        videoPortConfig.videoPortIndex = 0;
+        videoPortConfig.connectedAudioPortType = hdmiAudioType;
+        videoPortConfig.connectedAudioPortIndex = 0;
+        videoPortConfig.defaultResolution = "1080p";
+        displayInfoImpl->_vpConfigStore.portConfigs.push_back(videoPortConfig);
 
-            Exchange::IDeviceSettingsAudio::AudioPortConfigInfo audioPortConfig{};
-            audioPortConfig.audioPortType = hdmiAudioType;
-            audioPortConfig.audioPortIndex = 0;
-            audioPortConfig.connectedVideoPortType = hdmiType;
-            audioPortConfig.connectedVideoPortIndex = 0;
-            displayInfoImpl->_audioConfigStore.portConfigs.push_back(audioPortConfig);
+        Exchange::IDeviceSettingsAudio::AudioPortConfigInfo audioPortConfig{};
+        audioPortConfig.audioPortType = hdmiAudioType;
+        audioPortConfig.audioPortIndex = 0;
+        audioPortConfig.connectedVideoPortType = hdmiType;
+        audioPortConfig.connectedVideoPortIndex = 0;
+        displayInfoImpl->_audioConfigStore.portConfigs.push_back(audioPortConfig);
 
-            Exchange::IDeviceSettingsVideoDevice::VideoDeviceConfigInfo videoDeviceConfig{};
-            videoDeviceConfig.numSupportedDFCs = 1;
-            displayInfoImpl->_vdConfigStore.deviceConfigs.push_back(videoDeviceConfig);
+        Exchange::IDeviceSettingsVideoDevice::VideoDeviceConfigInfo videoDeviceConfig{};
+        videoDeviceConfig.numSupportedDFCs = 1;
+        displayInfoImpl->_vdConfigStore.deviceConfigs.push_back(videoDeviceConfig);
         displayInfoImpl->_videoPortHandles["HDMI0"] = 10;
         displayInfoImpl->_audioPortHandles["HDMI0"] = 30;
         displayInfoImpl->_displayHandles["HDMI0"] = 20;
@@ -421,6 +423,8 @@ protected:
         plugin->Deinitialize(&service);
         dispatcher->Deactivate();
         dispatcher->Release();
+
+        displayInfoImplementation.Release();
 
         delete p_dsRootMock;
         delete p_dsVideoDeviceMock;
