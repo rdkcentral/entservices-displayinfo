@@ -315,14 +315,9 @@ protected:
                 }));
 
         ON_CALL(service, State())
-            .WillByDefault(::testing::Return(PluginHost::IShell::ACTIVATED));
-
+            .WillByDefault(::testing::Return(PluginHost::IShell::DEACTIVATED));
         ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::StrEq("org.rdk.DeviceSettings")))
-            .WillByDefault(::testing::Invoke(
-                [this](const uint32_t /* interfaceId */, const string& /* callsign */) -> void* {
-                    p_dsRootMock->AddRef();
-                    return p_dsRootMock;
-                }));
+            .WillByDefault(::testing::Return(nullptr));
 
 #ifdef USE_THUNDER_R4
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
