@@ -218,7 +218,7 @@ protected:
             .WillByDefault(::testing::Invoke(
                 [this](Exchange::IDeviceSettingsDisplay::DisplayPortType, int32_t, int32_t& handle) {
                     handle = 20;
-                    displayInfoImplementation->_displayHandle.store(handle);
+                    displayInfoImplementation->_displayHandle = handle;
                     {
                         std::lock_guard<std::mutex> lock(deviceSettingsMutex);
                         deviceSettingsInitialized = true;
@@ -424,8 +424,18 @@ protected:
                     return &comLinkMock;
                 }));
 
+        // Force the plugin out-of-process so IShell::Root() routes through
+        // COMLink()->Instantiate (the mock returning the single fixture impl)
+        // instead of the in-process loader, which would create a fresh,
+        // unconfigured DisplayInfoImplementation on every service.Root() call.
+        ON_CALL(service, ConfigLine())
+            .WillByDefault(::testing::Return(_T("{\"root\":{\"mode\":\"Local\"}}")));
+
         ON_CALL(service, QueryInterface(::testing::_))
             .WillByDefault(::testing::Invoke([this](const uint32_t interfaceId) -> void* {
+                if (interfaceId == PluginHost::IShell::ICOMLink::ID) {
+                    return static_cast<PluginHost::IShell::ICOMLink*>(&comLinkMock);
+                }
                 TEST_LOG("Returning DeviceSettings root mock for interface 0x%08x: %p", interfaceId, p_dsRootMock);
                 p_dsRootMock->AddRef();
                 return static_cast<Exchange::IDeviceSettings*>(p_dsRootMock);
@@ -479,7 +489,7 @@ protected:
         TEST_LOG("Fixture ready: fixtureImpl=%p pluginInstance=%p displayHandle=%d vpHandle(HDMI0)=%d dsOperational=%d",
                  static_cast<void*>(&(*displayInfoImplementation)),
                  static_cast<void*>(Plugin::DisplayInfoImplementation::_instance),
-                 displayInfoImplementation->_displayHandle.load(),
+                 displayInfoImplementation->_displayHandle,
                  displayInfoImplementation->getCachedVideoPortHandle(
                      displayInfoImplementation->getDefaultVideoPortName()),
                  static_cast<int>(displayInfoImplementation->IsOperational()));
