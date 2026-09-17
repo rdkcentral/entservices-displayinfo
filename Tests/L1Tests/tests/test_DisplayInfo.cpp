@@ -136,8 +136,11 @@ protected:
     , displayInfoImplementation(Core::ProxyType<Plugin::DisplayInfoImplementation>::Create())
     , handler(*(plugin))
     , INIT_CONX(1, 0)
+    // PluginSmartInterfaceType (used by DSHelper) requires >= 2 real worker threads
+    // to avoid registration/dispatch contention; WorkerPoolImplementation reserves
+    // (threads - 1) real threads, so pass 3 here.
     , workerPool(Core::ProxyType<WorkerPoolImplementation>::Create(
-      2, Core::Thread::DefaultStackSize(), 16))
+      3, Core::Thread::DefaultStackSize(), 16))
     {
         ::testing::DefaultValue<Core::hresult>::Set(Core::ERROR_UNAVAILABLE);
 
