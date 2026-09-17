@@ -433,12 +433,14 @@ protected:
 
         ON_CALL(service, QueryInterface(::testing::_))
             .WillByDefault(::testing::Invoke([this](const uint32_t interfaceId) -> void* {
-                if (interfaceId == PluginHost::IShell::ICOMLink::ID) {
-                    return static_cast<PluginHost::IShell::ICOMLink*>(&comLinkMock);
+                if (interfaceId == Exchange::IDeviceSettings::ID) {
+                    TEST_LOG("Returning DeviceSettings root mock for interface 0x%08x: %p", interfaceId, p_dsRootMock);
+                    p_dsRootMock->AddRef();
+                    return static_cast<Exchange::IDeviceSettings*>(p_dsRootMock);
                 }
-                TEST_LOG("Returning DeviceSettings root mock for interface 0x%08x: %p", interfaceId, p_dsRootMock);
-                p_dsRootMock->AddRef();
-                return static_cast<Exchange::IDeviceSettings*>(p_dsRootMock);
+                // Any other IShell interface query (notably ICOMLink) resolves to the
+                // COMLink mock so IShell::Root()'s OOP path instantiates the shared impl.
+                return static_cast<PluginHost::IShell::ICOMLink*>(&comLinkMock);
             }));
         ON_CALL(service, Register(::testing::Matcher<PluginHost::IPlugin::INotification*>(::testing::_)))
             .WillByDefault(::testing::Invoke(
