@@ -476,7 +476,9 @@ protected:
         // Diagnostic: capture DeviceSettings state at end of fixture setup so we can
         // tell whether a later "handle/root not available" is incomplete activation
         // (bad here) or a mid-test deactivation (good here, bad in the test body).
-        TEST_LOG("Fixture ready: displayHandle=%d vpHandle(HDMI0)=%d dsOperational=%d",
+        TEST_LOG("Fixture ready: fixtureImpl=%p pluginInstance=%p displayHandle=%d vpHandle(HDMI0)=%d dsOperational=%d",
+                 static_cast<void*>(&(*displayInfoImplementation)),
+                 static_cast<void*>(Plugin::DisplayInfoImplementation::_instance),
                  displayInfoImplementation->_displayHandle.load(),
                  displayInfoImplementation->getCachedVideoPortHandle(
                      displayInfoImplementation->getDefaultVideoPortName()),
