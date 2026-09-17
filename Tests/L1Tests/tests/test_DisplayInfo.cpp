@@ -473,6 +473,15 @@ protected:
                 << "DeviceSettings COM-RPC activation did not complete in time";
         }
 
+        // Diagnostic: capture DeviceSettings state at end of fixture setup so we can
+        // tell whether a later "handle/root not available" is incomplete activation
+        // (bad here) or a mid-test deactivation (good here, bad in the test body).
+        TEST_LOG("Fixture ready: displayHandle=%d vpHandle(HDMI0)=%d dsOperational=%d",
+                 displayInfoImplementation->_displayHandle.load(),
+                 displayInfoImplementation->getCachedVideoPortHandle(
+                     displayInfoImplementation->getDefaultVideoPortName()),
+                 static_cast<int>(displayInfoImplementation->IsOperational()));
+
         p_drmMock  = new NiceMock <DRMMock>;
         drmImpl::setImpl(p_drmMock);
 
