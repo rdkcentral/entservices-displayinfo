@@ -409,6 +409,7 @@ protected:
 
         if (!Core::IWorkerPool::IsAvailable()) {
             Core::IWorkerPool::Assign(&(*workerPool));
+            workerPool->Run();
             workerPoolAssigned = true;
         }
 
@@ -489,6 +490,7 @@ protected:
         delete p_dsVideoPortMock;
 
         if (workerPoolAssigned) {
+            workerPool->Stop();
             Core::IWorkerPool::Assign(nullptr);
             workerPoolAssigned = false;
         }
