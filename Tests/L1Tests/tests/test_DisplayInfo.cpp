@@ -218,7 +218,7 @@ protected:
             .WillByDefault(::testing::Invoke(
                 [this](Exchange::IDeviceSettingsDisplay::DisplayPortType, int32_t, int32_t& handle) {
                     handle = 20;
-                    displayInfoImplementation->_displayHandle = handle;
+                    displayInfoImplementation->_displayHandle.store(handle);
                     {
                         std::lock_guard<std::mutex> lock(deviceSettingsMutex);
                         deviceSettingsInitialized = true;
@@ -790,29 +790,14 @@ protected:
         ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
             .WillByDefault(::testing::Return(true));
 
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
+        ON_CALL(*p_dsDisplayMock, GetDisplayEdidBytes(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                [](std::vector<uint8_t>& edidVec) {
-                    edidVec = DisplayInfoTest::DetailedTimingEdid(70, 35);
-                }));
-
-        ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_,::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [&](unsigned char* bytes, size_t count) {
-                    // Mocked verification logic
-                    return edid_parser::EDID_STATUS_OK;
-                }));
-
-        ON_CALL(*p_edidParserMock, EDID_Parse(::testing::_,::testing::_, ::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [&](unsigned char* bytes, size_t count, edid_parser::edid_data_t* data_ptr) {
-                    // Mocked parsing logic
-                    edid_parser::edid_res_t res = {0};
-                    res.refresh = 60;
-                    res.width = 70;
-                    res.height = 35;
-                    data_ptr->res = res; // Set the expected width and height
-                    return edid_parser::EDID_STATUS_OK;
+                [](int32_t, uint8_t* bytes, uint16_t length) {
+                    const std::vector<uint8_t> edid = DisplayInfoTest::DetailedTimingEdid(70, 35);
+                    const size_t copyLength = std::min(edid.size(), static_cast<size_t>(length));
+                    std::copy(edid.begin(), edid.begin() + copyLength, bytes);
+                    std::fill(bytes + copyLength, bytes + length, 0);
+                    return Core::ERROR_NONE;
                 }));
 
 

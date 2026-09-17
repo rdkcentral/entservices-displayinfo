@@ -38,6 +38,7 @@
 #include "../DisplayInfoTracing.h"
 #include "SoC_abstraction.h"
 
+#include <atomic>
 #include <interfaces/IDisplayInfo.h>
 #include <interfaces/IConfiguration.h>
 #include "DeviceSettingsInterface.h"               // DSHelper + config stores + VP/Audio/VideoDevice sub-interfaces
@@ -219,9 +220,9 @@ public:
         VideoPortEntry defaultEntry{};
         const bool entryResolved = DSHelper::resolveVideoPortByName(defaultVP, defaultEntry);
         if (entryResolved) {
-            _defaultPortType = defaultEntry.type;
+            _defaultPortType.store(defaultEntry.type);
             LOGINFO("Default video port: '%s' type=%d handle=%d",
-                    defaultVP.c_str(), static_cast<int>(_defaultPortType),
+                defaultVP.c_str(), static_cast<int>(_defaultPortType.load()),
                     DSHelper::getCachedVideoPortHandle(defaultVP));
         } else {
             LOGERR("OnDeviceSettingsActivated: failed to resolve default video port '%s'", defaultVP.c_str());
@@ -240,19 +241,21 @@ public:
 
         // ---- 3. Acquire display handle for the default port ----
         // Display handles are not cached by DSHelper::LoadAllConfigs — acquire explicitly.
-        _displayHandle = INVALID_DS_HANDLE;
+        _displayHandle.store(INVALID_DS_HANDLE);
         if (entryResolved && DSHelper::getCachedVideoPortHandle(defaultVP) != INVALID_DS_HANDLE) {
             auto* disp = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
             if (disp != nullptr) {
                 Exchange::IDeviceSettingsDisplay::DisplayPortType dpType =
                     static_cast<Exchange::IDeviceSettingsDisplay::DisplayPortType>(defaultEntry.type);
-                Core::hresult rc = disp->GetDisplay(dpType, defaultEntry.index, _displayHandle);
+                int32_t displayHandle = INVALID_DS_HANDLE;
+                Core::hresult rc = disp->GetDisplay(dpType, defaultEntry.index, displayHandle);
                 disp->Release();
                 if (rc != Core::ERROR_NONE) {
                     LOGERR("OnDeviceSettingsActivated: GetDisplay failed: %u", rc);
-                    _displayHandle = INVALID_DS_HANDLE;
+                    _displayHandle.store(INVALID_DS_HANDLE);
                 } else {
-                    LOGINFO("Cached display handle: %d", _displayHandle);
+                    _displayHandle.store(displayHandle);
+                    LOGINFO("Cached display handle: %d", _displayHandle.load());
                 }
             } else {
                 LOGERR("OnDeviceSettingsActivated: IDeviceSettingsDisplay not available");
@@ -268,8 +271,8 @@ public:
     void OnDeviceSettingsDeactivated() override
     {
         LOGINFO("DisplayInfo: DeviceSettings deactivated — clearing cached handles");
-        _displayHandle   = INVALID_DS_HANDLE;
-        _defaultPortType = VideoPortType::DS_VIDEO_PORT_TYPE_HDMI;
+        _displayHandle.store(INVALID_DS_HANDLE);
+        _defaultPortType.store(VideoPortType::DS_VIDEO_PORT_TYPE_HDMI);
     }
 
     // -------------------------------------------------------------------------
@@ -956,8 +959,8 @@ private:
             return false;
         }
         LOGINFO("IsDisplayAccessible: portHandle=%d portType=%d",
-                vpHandle, static_cast<int>(_defaultPortType));
-        if (_defaultPortType == VideoPortType::DS_VIDEO_PORT_TYPE_INTERNAL) {
+                vpHandle, static_cast<int>(_defaultPortType.load()));
+            if (_defaultPortType.load() == VideoPortType::DS_VIDEO_PORT_TYPE_INTERNAL) {
             return true;
         }
         bool connected = false;
@@ -1047,7 +1050,8 @@ private:
      */
     uint32_t GetEdidBytes(std::vector<uint8_t>& edidVec) const
     {
-        if (_displayHandle == INVALID_DS_HANDLE) {
+        const int32_t displayHandle = _displayHandle.load();
+        if (displayHandle == INVALID_DS_HANDLE) {
             LOGERR("GetEdidBytes: display handle not available");
             return Core::ERROR_UNAVAILABLE;
         }
@@ -1059,7 +1063,7 @@ private:
 
         static const uint16_t kEdidBufLen = 256;
         edidVec.assign(kEdidBufLen, 0);
-        Core::hresult rc = disp->GetDisplayEdidBytes(_displayHandle, edidVec.data(), kEdidBufLen);
+        Core::hresult rc = disp->GetDisplayEdidBytes(displayHandle, edidVec.data(), kEdidBufLen);
         disp->Release();
 
         if (rc == Core::ERROR_NONE) {
@@ -1091,8 +1095,8 @@ private:
 
     mutable Core::CriticalSection                    _adminLock;
     std::list<IConnectionProperties::INotification*> _observers;
-    VideoPortType                                    _defaultPortType;
-    int32_t                                          _displayHandle;      ///< display handle for default video port (EDID access)
+    std::atomic<VideoPortType>                       _defaultPortType;
+    std::atomic<int32_t>                             _displayHandle;
     Core::Sink<DSVideoPortNotification>              _DSVideoPortNotification;
 
 public:
