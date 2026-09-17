@@ -218,6 +218,7 @@ protected:
             .WillByDefault(::testing::Invoke(
                 [this](Exchange::IDeviceSettingsDisplay::DisplayPortType, int32_t, int32_t& handle) {
                     handle = 20;
+                    displayInfoImplementation->_displayHandle = handle;
                     {
                         std::lock_guard<std::mutex> lock(deviceSettingsMutex);
                         deviceSettingsInitialized = true;
