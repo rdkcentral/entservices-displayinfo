@@ -419,8 +419,9 @@ protected:
                     return &comLinkMock;
                 }));
 
-        ON_CALL(service, QueryInterface(Exchange::IDeviceSettings::ID))
-            .WillByDefault(::testing::Invoke([this](const uint32_t) -> void* {
+        ON_CALL(service, QueryInterface(::testing::_))
+            .WillByDefault(::testing::Invoke([this](const uint32_t interfaceId) -> void* {
+                TEST_LOG("Returning DeviceSettings root mock for interface 0x%08x: %p", interfaceId, p_dsRootMock);
                 p_dsRootMock->AddRef();
                 return static_cast<Exchange::IDeviceSettings*>(p_dsRootMock);
             }));

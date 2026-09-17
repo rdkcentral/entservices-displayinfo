@@ -207,6 +207,12 @@ jobs:
           &&
           cmake --install build/entservices-apis
 
+      - name: Copy DeviceSettings interface headers
+        # entservices-apis does not install apis/DeviceSettings/*.h under interfaces/ on its own.
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/install/usr/include/WPEFramework/interfaces"
+          find "$GITHUB_WORKSPACE/entservices-apis/apis/DeviceSettings" -name "IDeviceSettings*.h" -exec cp {} "$GITHUB_WORKSPACE/install/usr/include/WPEFramework/interfaces/" \; 2>/dev/null || true
+
       - name: Generate external headers
         # Empty headers to mute errors
         run: >
@@ -447,7 +453,6 @@ jobs:
           -Wl,-wrap,syslog -Wl,-wrap,v_secure_system -Wl,-wrap,v_secure_popen -Wl,-wrap,v_secure_pclose -Wl,-wrap,unlink -Wl,-wrap,v_secure_system -Wl,-wrap,setmntent -Wl,-wrap,getmntent
           -DENABLE_TELEMETRY_LOGGING
           -DUSE_IARMBUS
-          -DUSE_DEVICESETTINGS
           -DBUILD_RPI
           -DENABLE_SYSTEM_GET_STORE_DEMO_LINK
           -DENABLE_DEEP_SLEEP
