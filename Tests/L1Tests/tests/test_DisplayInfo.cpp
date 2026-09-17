@@ -462,8 +462,14 @@ protected:
 
         {
             std::unique_lock<std::mutex> lock(deviceSettingsMutex);
+            // EXPECT (not ASSERT): this runs in the fixture ctor, and ASSERT_* would
+            // return early from a constructor, leaving the object half-built and the
+            // destructor tearing down state that was never set up. A failure here
+            // means DS never activated for this fixture, explaining any downstream
+            // "root not available" failures in the test body.
             EXPECT_TRUE(deviceSettingsCondition.wait_for(
-                lock, std::chrono::seconds(2), [this]() { return deviceSettingsInitialized; }));
+                lock, std::chrono::seconds(5), [this]() { return deviceSettingsInitialized; }))
+                << "DeviceSettings COM-RPC activation did not complete in time";
         }
 
         p_drmMock  = new NiceMock <DRMMock>;
