@@ -321,7 +321,27 @@ protected:
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients& value) {
                     try {
-                        value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(p_videoOutputPortMock->getMatrixCoefficients());
+                        // The DS HAL enum (dsDisplayMatrixCoefficients_t) and the COM-RPC
+                        // enum (DisplayMatrixCoefficients) use different numeric orderings,
+                        // so map by name instead of casting the raw value.
+                        switch (p_videoOutputPortMock->getMatrixCoefficients()) {
+                        case dsDISPLAY_MATRIXCOEFFICIENT_BT_709:
+                            value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL:
+                            value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL:
+                            value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_CL; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M:
+                            value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_SMPTE_170M; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709:
+                            value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_XVYCC_709; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601:
+                            value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_EXVYCC_601; break;
+                        case dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN:
+                            value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN; break;
+                        default:
+                            value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(p_videoOutputPortMock->getMatrixCoefficients()); break;
+                        }
                         return Core::ERROR_NONE;
                     } catch (...) {
                         return Core::ERROR_GENERAL;
@@ -976,6 +996,7 @@ protected:
                     // EDID must be at least 23 bytes for index 21 (EDID_MAX_HORIZONTAL_SIZE)
                     edidVec = std::vector<uint8_t>(23, 0);
                     edidVec[21] = 77; // Set horizontal size in cm at index 21
+                    edidVec[22] = 55; // non-zero terminal byte so GetEdidBytes zero-trim keeps 23 bytes
                 }));
     
         // Act: Call the WidthInCentimeters function via the COMRPC interface
@@ -1718,6 +1739,10 @@ TEST_F(DisplayInfoTestTest, IsAudioPassthrough_ExceptionHandling)
         .WillByDefault(::testing::ReturnRef(videoOutputPort));
     ON_CALL(*p_videoOutputPortMock, getAudioOutputPort())
         .WillByDefault(::testing::ReturnRef(audioOutputPort));
+    // HDMI audio connectivity gates IsAudioPassthrough; keep the display connected
+    // so execution reaches the throwing getStereoMode() path under test.
+    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+        .WillByDefault(::testing::Return(true));
     
     // Mock to throw exception
     ON_CALL(*p_audioOutputPortMock, getStereoMode(::testing::_))
