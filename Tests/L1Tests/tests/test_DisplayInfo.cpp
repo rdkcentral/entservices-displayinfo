@@ -324,7 +324,8 @@ protected:
                         // The DS HAL enum (dsDisplayMatrixCoefficients_t) and the COM-RPC
                         // enum (DisplayMatrixCoefficients) use different numeric orderings,
                         // so map by name instead of casting the raw value.
-                        switch (p_videoOutputPortMock->getMatrixCoefficients()) {
+                        const int matrix = p_videoOutputPortMock->getMatrixCoefficients();
+                        switch (matrix) {
                         case dsDISPLAY_MATRIXCOEFFICIENT_BT_709:
                             value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709; break;
                         case dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL:
@@ -340,7 +341,7 @@ protected:
                         case dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN:
                             value = Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN; break;
                         default:
-                            value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(p_videoOutputPortMock->getMatrixCoefficients()); break;
+                            value = static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(matrix); break;
                         }
                         return Core::ERROR_NONE;
                     } catch (...) {
