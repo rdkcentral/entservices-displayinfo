@@ -1922,7 +1922,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         DisplayInfoNotificationHandler() {}
         ~DisplayInfoNotificationHandler() {}
 
-        void Updated(const Exchange::IConnectionProperties::INotification::Source event, const bool isFrameRateChanged VARIABLE_IS_NOT_USED) override
+        void Updated(const Exchange::IConnectionProperties::INotification::Source event, const bool isFrameRateChanged) override
         {
             std::unique_lock<std::mutex> lock(m_mutex);
             
