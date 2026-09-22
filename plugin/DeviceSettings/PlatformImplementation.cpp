@@ -176,6 +176,7 @@ public:
         if(DisplayInfoImplementation::_instance)
         {
            bool isFrameRateChanged = DisplayInfoImplementation::_instance->IsFrameRateChanged();
+           LOGINFO("OnResolutionPostChange: frame rate %s", isFrameRateChanged ? "changed" : "unchanged");
            DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE, isFrameRateChanged);
         }
     }
@@ -186,9 +187,11 @@ public:
     Core::hresult Configure() override
     {
         Core::hresult result = Core::ERROR_GENERAL;
+        _frameRateLock.Lock();
         try
         {
             result = FrameRate(_cachedFrameRate);
+            LOGINFO("Configure: caching initial frame rate = %d", static_cast<int>(_cachedFrameRate));
         }
         catch(const device::Exception& err)
         {
@@ -202,16 +205,19 @@ public:
         {
            LOGERR("Configure (frame-rate cache) failed with unknown exception");
         }
+        _frameRateLock.Unlock();
         return result;
     }
 
     bool IsFrameRateChanged()
     {
         FrameRateType newRate = FRAMERATE_UNKNOWN;
-        FrameRate(newRate);
 
+        _frameRateLock.Lock();
+        FrameRate(newRate);
         bool changed = (newRate != _cachedFrameRate);
         _cachedFrameRate = newRate;
+        _frameRateLock.Unlock();
 
 	return changed;
     }
@@ -960,6 +966,7 @@ public:
 private:
     std::list<IConnectionProperties::INotification*> _observers;
     mutable Core::CriticalSection _adminLock;
+    mutable Core::CriticalSection _frameRateLock;
     FrameRateType _cachedFrameRate = FRAMERATE_UNKNOWN;
 
 private:
