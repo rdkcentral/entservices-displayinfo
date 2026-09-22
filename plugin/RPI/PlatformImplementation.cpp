@@ -174,6 +174,11 @@ public:
     {
         return (Core::ERROR_UNAVAILABLE);
     }
+    Core::hresult Configure() override
+    {
+        // Not applicable: this backend does not implement frame-rate change detection.
+        return (Core::ERROR_UNAVAILABLE);
+    }
     Core::hresult TVCapabilities(IHDRIterator*&) const override
     {
         return (Core::ERROR_UNAVAILABLE);

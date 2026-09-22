@@ -2467,7 +2467,8 @@ public:
 };
 
 /**
- * @brief Task 5.1: the frame rate is cached during construction, before any resolution change occurs.
+ * @brief Task 5.1: the frame rate is cached once DisplayInfo::Initialize() calls Configure(), before
+ * any resolution-change event occurs.
  */
 TEST_F(DisplayInfoTestTest, FrameRate_CachedOnConstruction)
 {
@@ -2498,19 +2499,19 @@ TEST_F(DisplayInfoTestTest, FrameRate_CachedOnConstruction)
     ON_CALL(*p_videoResolutionMock, getFrameRate())
         .WillByDefault(::testing::ReturnRef(frameRate60));
 
-    // Act: constructing DisplayInfoImplementation runs the constructor's initial
-    // FrameRate() query, which should cache FRAMERATE_60 given the mocks above.
     uint32_t _connectionId = 0;
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
+
+    // Mirrors what DisplayInfo::Initialize() does once, after Root<>() returns: warm up the cache.
+    connectionProperties->Configure();
 
     Core::Sink<DisplayInfoFrameRateNotificationHandler> notification;
     uint32_t result = connectionProperties->Register(&notification);
     EXPECT_EQ(result, Core::ERROR_NONE);
 
     // Assert: a resolution-change event observing the SAME frame rate must report
-    // isFrameRateChanged == false, proving the cache was already populated with
-    // FRAMERATE_60 at construction time.
+    // isFrameRateChanged == false, proving the cache was already populated with FRAMERATE_60.
     notification.Reset();
     Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange(3840, 2160);
 
@@ -2531,7 +2532,8 @@ TEST_F(DisplayInfoTestTest, FrameRate_Unchanged_NoNotification)
     string videoPort(_T("HDMI0"));
     std::string videoName = "HDMI-1";
 
-    // No display connected at construction time (default mocks) -> cache starts at FRAMERATE_UNKNOWN.
+    // Display disconnected throughout -> FrameRate() reports FRAMERATE_UNKNOWN each time, including
+    // Configure()'s cache warm-up call below.
     ON_CALL(*p_videoOutputPortMock, getName())
         .WillByDefault(::testing::ReturnRef(videoName));
     ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
@@ -2548,6 +2550,9 @@ TEST_F(DisplayInfoTestTest, FrameRate_Unchanged_NoNotification)
     uint32_t _connectionId = 0;
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
+
+    // Mirrors what DisplayInfo::Initialize() does once, after Root<>() returns: warm up the cache.
+    connectionProperties->Configure();
 
     Core::Sink<DisplayInfoFrameRateNotificationHandler> notification;
     uint32_t result = connectionProperties->Register(&notification);
@@ -2579,7 +2584,7 @@ TEST_F(DisplayInfoTestTest, FrameRate_Changed_EmitsNotification)
     string videoPort(_T("HDMI0"));
     std::string videoName = "HDMI-1";
 
-    // No display connected at construction time (default mocks) -> cache starts at FRAMERATE_UNKNOWN.
+    // Display disconnected at construction -> Configure()'s cache warm-up call caches FRAMERATE_UNKNOWN.
     ON_CALL(*p_videoOutputPortMock, getName())
         .WillByDefault(::testing::ReturnRef(videoName));
     ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
@@ -2596,6 +2601,9 @@ TEST_F(DisplayInfoTestTest, FrameRate_Changed_EmitsNotification)
     uint32_t _connectionId = 0;
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
+
+    // Mirrors what DisplayInfo::Initialize() does once, after Root<>() returns: warm up the cache.
+    connectionProperties->Configure();
 
     Core::Sink<DisplayInfoFrameRateNotificationHandler> notification;
     uint32_t result = connectionProperties->Register(&notification);

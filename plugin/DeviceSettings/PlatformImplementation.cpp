@@ -103,9 +103,6 @@ public:
         {
            LOGERR("device::Manager::Initialize failed with unknown exception");
         }
-
-        // Cache the initial frame rate so later resolution-change events can detect a real change.
-        FrameRate(_cachedFrameRate);
     }
 
     DisplayInfoImplementation(const DisplayInfoImplementation&) = delete;
@@ -183,17 +180,40 @@ public:
         }
     }
 
+    // Runs once, called explicitly by DisplayInfo::Initialize() (see plugin/DisplayInfo.cpp) after
+    // Root<>() returns and the Platform precondition is already satisfied — by this point the
+    // device/IARM subsystem is expected to be up, so no retry/background thread is needed here.
+    Core::hresult Configure() override
+    {
+        Core::hresult result = Core::ERROR_GENERAL;
+        try
+        {
+            result = FrameRate(_cachedFrameRate);
+        }
+        catch(const device::Exception& err)
+        {
+           LOGERR("Configure (frame-rate cache) failed: code=%d, message=%s", err.getCode(), err.what());
+        }
+        catch(const std::exception& e)
+        {
+           LOGERR("Configure (frame-rate cache) failed: %s", e.what());
+        }
+        catch(...)
+        {
+           LOGERR("Configure (frame-rate cache) failed with unknown exception");
+        }
+        return result;
+    }
+
     bool IsFrameRateChanged()
     {
         FrameRateType newRate = FRAMERATE_UNKNOWN;
         FrameRate(newRate);
-        if (newRate != _cachedFrameRate)
-        {
-            _cachedFrameRate = newRate;
-	    return true;
-        }
 
-	return false;
+        bool changed = (newRate != _cachedFrameRate);
+        _cachedFrameRate = newRate;
+
+	return changed;
     }
 
     void ResolutionChangeImpl(IConnectionProperties::INotification::Source eventtype, bool isFrameRateChanged)

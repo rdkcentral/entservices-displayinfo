@@ -64,6 +64,11 @@ namespace Plugin {
             _connectionProperties->Register(&_notification);
             Exchange::JConnectionProperties::Register(*this, _connectionProperties);
 
+            // One-shot frame-rate cache warm-up: called here (once, after Root<>() has returned and
+            // the Platform precondition is already satisfied) rather than from the implementation's
+            // constructor, so no retry/background thread is needed to wait for the device subsystem.
+            _connectionProperties->Configure();
+
             Exchange::IConfiguration* configConnection = _connectionProperties->QueryInterface<Exchange::IConfiguration>();
             if (configConnection != nullptr) {
                 configConnection->Configure(service);

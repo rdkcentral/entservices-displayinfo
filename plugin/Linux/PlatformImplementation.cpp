@@ -614,6 +614,12 @@ namespace Plugin {
             return Core::ERROR_UNAVAILABLE;
         }
 
+        Core::hresult Configure() override
+        {
+            // Not applicable: this backend does not implement frame-rate change detection.
+            return Core::ERROR_UNAVAILABLE;
+        }
+
         void Dispatch() const
         {
             std::lock_guard<std::mutex> lock(_observersLock);
