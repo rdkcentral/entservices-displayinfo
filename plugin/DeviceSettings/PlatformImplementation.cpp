@@ -214,12 +214,29 @@ public:
         FrameRateType newRate = FRAMERATE_UNKNOWN;
 
         _frameRateLock.Lock();
-        FrameRate(newRate);
+        try
+        {
+            result = FrameRate(newRate);
+            LOGINFO("NewFramerate = %d", static_cast<int>(newRate));
+        }
+        catch(const device::Exception& err)
+        {
+           LOGERR("Failed to get framerate code=%d, message=%s", err.getCode(), err.what());
+        }
+        catch(const std::exception& e)
+        {
+           LOGERR("failed to get framerate %s", e.what());
+        }
+        catch(...)
+        {
+           LOGERR("failed to get framerate with unknown exception");
+        }
+		
         bool changed = (newRate != _cachedFrameRate);
         _cachedFrameRate = newRate;
         _frameRateLock.Unlock();
 
-	return changed;
+	    return changed;
     }
 
     void ResolutionChangeImpl(IConnectionProperties::INotification::Source eventtype, bool isFrameRateChanged)
