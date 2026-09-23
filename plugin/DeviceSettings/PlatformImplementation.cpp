@@ -216,7 +216,7 @@ public:
         _frameRateLock.Lock();
         try
         {
-            result = FrameRate(newRate);
+            FrameRate(newRate);
             LOGINFO("NewFramerate = %d", static_cast<int>(newRate));
         }
         catch(const device::Exception& err)
