@@ -354,7 +354,7 @@ public:
             value = (mode == Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH);
         }
         audio->Release();
-        return rc;
+        return Core::ERROR_NONE;
     }
 
     Core::hresult Connected(bool& connected) const override
