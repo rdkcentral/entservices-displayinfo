@@ -61,6 +61,7 @@ namespace Plugin {
 
         _connectionProperties = service->Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
         if (_connectionProperties != nullptr) {
+            _connectionProperties->InitializeFrameRate();
             _connectionProperties->Register(&_notification);
             Exchange::JConnectionProperties::Register(*this, _connectionProperties);
 

@@ -175,8 +175,69 @@ public:
         LOGINFO("OnResolutionPostChange: width %d, height %d",width, height);
         if(DisplayInfoImplementation::_instance)
         {
+           bool isFrameRateChanged = DisplayInfoImplementation::_instance->IsFrameRateChanged();
+           if (isFrameRateChanged) {
+               LOGINFO("Triggering FrameRateChange event");
+               DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::FRAMERATE_CHANGE);
+           }
            DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
         }
+    }
+
+    bool IsFrameRateChanged()
+    {
+        FrameRateType newRate = FRAMERATE_UNKNOWN;
+
+        _frameRateLock.Lock();
+        try
+        {
+            FrameRate(newRate);
+            LOGINFO("Current Framerate = %d", static_cast<int>(newRate));
+        }
+        catch(const device::Exception& err)
+        {
+           LOGERR("Failed to get framerate code=%d, message=%s", err.getCode(), err.what());
+        }
+        catch(const std::exception& e)
+        {
+           LOGERR("failed to get framerate %s", e.what());
+        }
+        catch(...)
+        {
+           LOGERR("failed to get framerate with unknown exception");
+        }
+
+        bool changed = (newRate != _cachedFrameRate);
+        _cachedFrameRate = newRate;
+        _frameRateLock.Unlock();
+
+        return changed;
+    }
+
+    Core::hresult InitializeFrameRate() override
+    {
+        Core::hresult result = Core::ERROR_GENERAL;
+        _frameRateLock.Lock();
+        try
+        {
+            result = FrameRate(_cachedFrameRate);
+            LOGINFO("caching initial frame rate = %d", static_cast<int>(_cachedFrameRate));
+        }
+        catch(const device::Exception& err)
+        {
+           LOGERR("frame-rate cache failed: code=%d, message=%s", err.getCode(), err.what());
+        }
+        catch(const std::exception& e)
+        {
+           LOGERR("frame-rate cache failed: %s", e.what());
+        }
+        catch(...)
+        {
+           LOGERR("frame-rate cache failed with unknown exception");
+        }
+        _frameRateLock.Unlock();
+
+        return result;
     }
 
     void ResolutionChangeImpl(IConnectionProperties::INotification::Source eventtype)
@@ -923,6 +984,8 @@ public:
 private:
     std::list<IConnectionProperties::INotification*> _observers;
     mutable Core::CriticalSection _adminLock;
+    mutable Core::CriticalSection _frameRateLock;
+    FrameRateType _cachedFrameRate { FRAMERATE_UNKNOWN };
 
 private:
     uint32_t GetEdidBytes(std::vector<uint8_t> &edid) const
