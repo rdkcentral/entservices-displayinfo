@@ -515,6 +515,11 @@ namespace Plugin {
             return (Core::ERROR_NONE);
         }
 
+        Core::hresult InitializeFrameRate() override
+        {
+            return Core::ERROR_NOT_SUPPORTED;
+        }
+
         Core::hresult IsAudioPassthrough(VARIABLE_IS_NOT_USED bool& passthru) const override
         {
             return Core::ERROR_UNAVAILABLE;

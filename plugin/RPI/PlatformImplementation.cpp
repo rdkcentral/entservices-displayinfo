@@ -120,6 +120,10 @@ public:
 
         return (Core::ERROR_NONE);
     }
+    Core::hresult InitializeFrameRate() override
+    {
+        return (Core::ERROR_UNAVAILABLE);
+    }
     Core::hresult IsAudioPassthrough (bool& passthru) const override
     {
         passthru = _audioPassthrough;
