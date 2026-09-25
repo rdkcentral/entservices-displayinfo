@@ -154,11 +154,9 @@ protected:
 
         PluginHost::IFactories::Assign(&factoriesImplementation);
 
-        dispatcher = static_cast<PLUGINHOST_DISPATCHER*>(
-        plugin->QueryInterface(PLUGINHOST_DISPATCHER_ID));
-        dispatcher->Activate(&service);
-        plugin->Initialize(&service);
-
+        // Device backends must be installed before Activate/Initialize, since
+        // Initialize() triggers InitializeFrameRate() -> FrameRate(), which
+        // dereferences the VideoOutputPort/VideoResolution mock implementations.
         p_drmMock  = new NiceMock <DRMMock>;
         drmImpl::setImpl(p_drmMock);
 
@@ -173,6 +171,11 @@ protected:
 
         p_videoDeviceMock = new NiceMock <VideoDeviceMock>;
         device::VideoDevice::setImpl(p_videoDeviceMock);
+
+        dispatcher = static_cast<PLUGINHOST_DISPATCHER*>(
+        plugin->QueryInterface(PLUGINHOST_DISPATCHER_ID));
+        dispatcher->Activate(&service);
+        plugin->Initialize(&service);
 
         ON_CALL(*p_connectionpropertiesMock, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
