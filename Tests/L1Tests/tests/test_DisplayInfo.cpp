@@ -154,11 +154,9 @@ protected:
 
         PluginHost::IFactories::Assign(&factoriesImplementation);
 
-        dispatcher = static_cast<PLUGINHOST_DISPATCHER*>(
-        plugin->QueryInterface(PLUGINHOST_DISPATCHER_ID));
-        dispatcher->Activate(&service);
-        plugin->Initialize(&service);
-
+        // Device backends must be installed before Activate/Initialize, since
+        // Initialize() triggers InitializeFrameRate() -> FrameRate(), which
+        // dereferences the VideoOutputPort/VideoResolution mock implementations.
         p_drmMock  = new NiceMock <DRMMock>;
         drmImpl::setImpl(p_drmMock);
 
@@ -173,6 +171,11 @@ protected:
 
         p_videoDeviceMock = new NiceMock <VideoDeviceMock>;
         device::VideoDevice::setImpl(p_videoDeviceMock);
+
+        dispatcher = static_cast<PLUGINHOST_DISPATCHER*>(
+        plugin->QueryInterface(PLUGINHOST_DISPATCHER_ID));
+        dispatcher->Activate(&service);
+        plugin->Initialize(&service);
 
         ON_CALL(*p_connectionpropertiesMock, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
@@ -1469,6 +1472,69 @@ TEST_F(DisplayInfoTestTest, FrameRate_ExceptionHandling)
     displayProperties->Release();
 }
 
+TEST_F(DisplayInfoTestTest, InitializeFrameRate_Success)
+{
+    device::VideoOutputPort videoOutputPort;
+    device::VideoResolution videoResolution;
+    device::PixelResolution pixelResolution;
+    device::FrameRate frameRate60(dsVIDEO_FRAMERATE_60);
+    string videoPort(_T("HDMI0"));
+
+    ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
+        .WillByDefault(::testing::Return(videoPort));
+    ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
+        .WillByDefault(::testing::ReturnRef(videoOutputPort));
+    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+        .WillByDefault(::testing::Return(true));
+    ON_CALL(*p_videoOutputPortMock, getResolution())
+        .WillByDefault(::testing::ReturnRef(videoResolution));
+    ON_CALL(*p_videoResolutionMock, getPixelResolution())
+        .WillByDefault(::testing::ReturnRef(pixelResolution));
+    ON_CALL(*p_videoResolutionMock, getFrameRate())
+        .WillByDefault(::testing::ReturnRef(frameRate60));
+
+    uint32_t _connectionId = 0;
+    Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(connectionProperties, nullptr);
+
+    // Caches FRAMERATE_60 so a subsequent unchanged read does not report a frame rate change
+    uint32_t result = connectionProperties->InitializeFrameRate();
+    EXPECT_EQ(result, Core::ERROR_NONE);
+
+    connectionProperties->Release();
+}
+
+TEST_F(DisplayInfoTestTest, InitializeFrameRate_ExceptionHandling)
+{
+    device::VideoOutputPort videoOutputPort;
+    device::VideoResolution videoResolution;
+    string videoPort(_T("HDMI0"));
+
+    ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
+        .WillByDefault(::testing::Return(videoPort));
+    ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
+        .WillByDefault(::testing::ReturnRef(videoOutputPort));
+    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+        .WillByDefault(::testing::Return(true));
+
+    // Mock to throw exception
+    ON_CALL(*p_videoOutputPortMock, getResolution())
+        .WillByDefault(::testing::Invoke([&]() -> device::VideoResolution& {
+            throw device::Exception("InitializeFrameRate device exception");
+            // This line won't be reached, but needed for compilation
+            return videoResolution;
+        }));
+
+    uint32_t _connectionId = 0;
+    Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(connectionProperties, nullptr);
+
+    uint32_t result = connectionProperties->InitializeFrameRate();
+    EXPECT_EQ(result, Core::ERROR_GENERAL);
+
+    connectionProperties->Release();
+}
+
 TEST_F(DisplayInfoTestTest, ColourDepth_ExceptionHandling)
 {
     device::VideoOutputPort videoOutputPort;
@@ -1913,6 +1979,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         std::condition_variable m_condition_variable;
         bool m_preResolutionChange_signalled = false;
         bool m_postResolutionChange_signalled = false;
+        bool m_frameRateChange_signalled = false;
 
         BEGIN_INTERFACE_MAP(DisplayInfoNotificationHandler)
         INTERFACE_ENTRY(Exchange::IConnectionProperties::INotification)
@@ -1935,6 +2002,10 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
                     TEST_LOG("POST_RESOLUTION_CHANGE event received\n");
                     m_postResolutionChange_signalled = true;
                     break;
+                case Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE:
+                    TEST_LOG("FRAMERATE_CHANGE event received\n");
+                    m_frameRateChange_signalled = true;
+                    break;
                 default:
                     break;
             }
@@ -1955,6 +2026,9 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
                 case Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE:
                     target_flag = &m_postResolutionChange_signalled;
                     break;
+                case Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE:
+                    target_flag = &m_frameRateChange_signalled;
+                    break;
                 default:
                     return false;
             }
@@ -1972,6 +2046,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
             std::unique_lock<std::mutex> lock(m_mutex);
             m_preResolutionChange_signalled = false;
             m_postResolutionChange_signalled = false;
+            m_frameRateChange_signalled = false;
         }
     };
 
@@ -2009,6 +2084,53 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         // Wait for notification with timeout
         bool eventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
         EXPECT_TRUE(eventReceived);
+    }
+
+    // Test FRAMERATE_CHANGE event - only fired when the frame rate differs from the cached value
+    {
+        device::VideoOutputPort videoOutputPort;
+        device::VideoResolution videoResolution;
+        device::PixelResolution pixelResolution;
+        device::FrameRate frameRate24(dsVIDEO_FRAMERATE_24);
+        device::FrameRate frameRate60(dsVIDEO_FRAMERATE_60);
+        string videoPort(_T("HDMI0"));
+
+        ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
+            .WillByDefault(::testing::Return(videoPort));
+        ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
+            .WillByDefault(::testing::ReturnRef(videoOutputPort));
+        ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+            .WillByDefault(::testing::Return(true));
+        ON_CALL(*p_videoOutputPortMock, getResolution())
+            .WillByDefault(::testing::ReturnRef(videoResolution));
+        ON_CALL(*p_videoResolutionMock, getPixelResolution())
+            .WillByDefault(::testing::ReturnRef(pixelResolution));
+
+        // Cache the initial frame rate (24 fps)
+        EXPECT_CALL(*p_videoResolutionMock, getFrameRate())
+            .WillOnce(::testing::ReturnRef(frameRate24));
+        result = connectionProperties->InitializeFrameRate();
+        EXPECT_EQ(result, Core::ERROR_NONE);
+
+        notification.Reset();
+
+        // Frame rate unchanged - no FRAMERATE_CHANGE expected
+        EXPECT_CALL(*p_videoResolutionMock, getFrameRate())
+            .WillOnce(::testing::ReturnRef(frameRate24));
+        Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 1920, 1080 );
+
+        EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
+        EXPECT_FALSE(notification.WaitForEvent(500, Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE));
+
+        notification.Reset();
+
+        // Frame rate changes to 60 fps - FRAMERATE_CHANGE expected alongside POST_RESOLUTION_CHANGE
+        EXPECT_CALL(*p_videoResolutionMock, getFrameRate())
+            .WillOnce(::testing::ReturnRef(frameRate60));
+        Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 3840, 2160 );
+
+        EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE));
+        EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
     }
 
     // Test multiple observers

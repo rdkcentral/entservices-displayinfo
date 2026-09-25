@@ -123,7 +123,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: 2.0.0
+          ref: feature/RDKEMW-24427_2
 
       - name: Checkout entservices-displayinfo
         if: ${{ inputs.caller_source == 'local' }}
@@ -137,7 +137,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-displayinfo
           path: entservices-displayinfo
-          ref: develop
+          ref: feature/RDKEMW-24427_2
 
       - name: Checkout googletest
         uses: actions/checkout@v3
@@ -185,7 +185,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-apis
           path: entservices-apis
-          ref: feature/RDKEMW-22037_2
+          ref: feature/RDKEMW-24427_2
           run: rm -rf $GITHUB_WORKSPACE/entservices-apis/jsonrpc/DTV.json
 
       - name: Apply patches entservices-apis
