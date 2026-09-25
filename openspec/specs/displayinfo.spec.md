@@ -44,6 +44,7 @@ subsystem is ready.
 | REQ-F-09 | HDCPProtection MUST support both getter and setter semantics on platforms that allow preference configuration (DeviceSettings, BCM/RPI). |
 | REQ-F-10 | The plugin MUST register with the `Platform` precondition and MUST NOT activate before that precondition is satisfied. |
 | REQ-F-11 | The DeviceSettings backend `Colorimetry()` MUST return an empty `IColorimetryIterator` and `ERROR_NONE` for all failure paths (display not connected, EDID read/verify failure, `device::Exception`). It MUST NOT return `ERROR_GENERAL` to callers. |
+| REQ-F-12 | The plugin MUST cache the active frame rate during `Initialize()` via `Exchange::IConnectionProperties::InitializeFrameRate()`, and the DeviceSettings backend MUST emit `Updated(FRAMERATE_CHANGE)` whenever a subsequent resolution-change callback observes a frame rate different from the cached value. |
 
 ### Non-Functional
 
@@ -75,6 +76,22 @@ subsystem is ready.
 #### Scenario: Implementation uses vector for EDID buffer
 - **WHEN** `Colorimetry()` reads EDID bytes from the display
 - **THEN** the implementation SHALL store EDID bytes in a `std::vector<unsigned char>` (not a raw `new unsigned char[]`)
+
+### DeviceSettings Backend Frame Rate Change Scenarios
+
+#### Scenario: Frame rate cached at initialization — DeviceSettings backend
+- **WHEN** `DisplayInfo::Initialize` acquires `_connectionProperties`
+- **THEN** it SHALL call `_connectionProperties->InitializeFrameRate()` before registering notification observers
+- **THEN** `InitializeFrameRate()` SHALL cache the current `FrameRateType` and return `ERROR_NONE`, or return `ERROR_GENERAL` if the resolution query throws
+
+#### Scenario: Frame rate change detected on resolution-change callback — DeviceSettings backend
+- **WHEN** `OnResolutionPostChange` fires and the queried frame rate differs from the cached value
+- **THEN** the backend SHALL emit `Updated(FRAMERATE_CHANGE)` before `Updated(POST_RESOLUTION_CHANGE)`
+- **THEN** the cache SHALL be updated to the newly queried value
+
+#### Scenario: Frame rate unchanged on resolution-change callback — DeviceSettings backend
+- **WHEN** `OnResolutionPostChange` fires and the queried frame rate matches the cached value
+- **THEN** the backend SHALL NOT emit `Updated(FRAMERATE_CHANGE)`
 
 ---
 
@@ -129,6 +146,7 @@ subsystem is ready.
       ├─ service->Root<IConnectionProperties>() ──► OOP implementation
       │       timeout = 2 000 ms
       │
+      ├─ InitializeFrameRate()  (caches baseline frame rate; best-effort)
       ├─ Register INotification
       ├─ IConfiguration::Configure(service)  (platform-specific config)
       │
@@ -243,6 +261,26 @@ Fired whenever the display connection or resolution changes.
 | `POST_RESOLUTION_CHANGE` | Resolution change has completed |
 | `HDMI_CHANGE` | HDMI hot-plug state changed |
 | `HDCP_CHANGE` | HDCP handshake state changed |
+| `FRAMERATE_CHANGE` | Active frame rate changed, detected during a resolution-change callback (DeviceSettings backend only); emitted before `POST_RESOLUTION_CHANGE` |
+
+---
+
+### Interface Method – `InitializeFrameRate` (not exposed via JSON-RPC)
+
+**Interface method:** `Exchange::IConnectionProperties::InitializeFrameRate()`
+
+Called once by `DisplayInfo::Initialize`, immediately after acquiring
+`_connectionProperties` and before registering notification observers. Seeds the
+baseline frame-rate cache used to detect `FRAMERATE_CHANGE` on subsequent
+resolution-change callbacks. Not bound to a JSON-RPC property; the return value is
+ignored by `Initialize` (best-effort, consistent with other non-fatal setup calls).
+
+| Condition | Return code |
+|-----------|-------------|
+| Resolution/frame rate readable (DeviceSettings) | `ERROR_NONE` |
+| `device::Exception` / `std::exception` / unknown exception (DeviceSettings) | `ERROR_GENERAL` |
+| Linux/DRM backend | `ERROR_NOT_SUPPORTED` |
+| BCM/RPI backend | `ERROR_UNAVAILABLE` |
 
 ---
 
@@ -769,7 +807,9 @@ Test cases:
 | `TVCapabilities_ExceptionHandling` | `TVCapabilities()` throws `device::Exception` |
 | `STBCapabilities_ExceptionHandling` | `STBCapabilities()` throws `device::Exception` |
 | `EDID_ExceptionHandling` | `EDID()` throws `device::Exception` |
-| `ResolutionChange_NotificationTest` | `Updated` event dispatch on resolution change |
+| `ResolutionChange_NotificationTest` | `Updated` event dispatch on resolution change, including `FRAMERATE_CHANGE` fired only when the frame rate differs from the cached value |
+| `InitializeFrameRate_Success` | `InitializeFrameRate()` caches the current frame rate and returns `ERROR_NONE` |
+| `InitializeFrameRate_ExceptionHandling` | `InitializeFrameRate()` returns `ERROR_GENERAL` when the underlying resolution query throws |
 | `CurrentColorimetry_BT709` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_709` → `COLORIMETRY_BT709` |
 | `CurrentColorimetry_BT2020NCL` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL` → `COLORIMETRY_BT2020RGB_YCBCR` |
 | `CurrentColorimetry_BT2020CL` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL` → `COLORIMETRY_BT2020YCCBCBRC` |
@@ -852,7 +892,9 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoImplementation::GetCurrentColorimetry`
     - `DisplayInfoImplementation::ResolutionChangeImpl`
     - `DisplayInfoImplementation::OnResolutionPreChange`
-    - `DisplayInfoImplementation::OnResolutionPostChange`
+    - `DisplayInfoImplementation::OnResolutionPostChange` (emits `FRAMERATE_CHANGE` before `POST_RESOLUTION_CHANGE`)
+    - `DisplayInfoImplementation::InitializeFrameRate`
+    - `DisplayInfoImplementation::IsFrameRateChanged`
 - `plugin/DeviceSettings/SoC_abstraction.h`:
     - `SoC_GetTotalGpuRam`
     - `SoC_GetFreeGpuRam`
@@ -893,6 +935,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoImplementation::PortName`
     - `DisplayInfoImplementation::Dispatch`
     - `DisplayInfoImplementation::EventQueue::Worker` (async event dispatch thread)
+    - `DisplayInfoImplementation::InitializeFrameRate` (stub — `ERROR_NOT_SUPPORTED`)
 - `plugin/RPI/PlatformImplementation.cpp`:
     - `DisplayInfoImplementation::Configure`
     - `DisplayInfoImplementation::TotalGpuRam` / `FreeGpuRam`
@@ -913,6 +956,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoImplementation::Colorimetry`
     - `DisplayInfoImplementation::EOTF`
     - `DisplayInfoImplementation::GetCurrentColorimetry`
+    - `DisplayInfoImplementation::InitializeFrameRate` (stub — `ERROR_UNAVAILABLE`)
 - `plugin/DisplayInfo.conf.in`:
     - Plugin configuration template
 - `plugin/DisplayInfo.config`:
@@ -949,6 +993,8 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoTestTest::STBCapabilities_ExceptionHandling`
     - `DisplayInfoTestTest::EDID_ExceptionHandling`
     - `DisplayInfoTestTest::ResolutionChange_NotificationTest`
+    - `DisplayInfoTestTest::InitializeFrameRate_Success`
+    - `DisplayInfoTestTest::InitializeFrameRate_ExceptionHandling`
 
 ---
 
@@ -990,3 +1036,4 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - 2026-04-29 — openspec-sync-specs — Merged ADDED requirements from displayinfo-colorimetry change: REQ-F-11 (Colorimetry error handling), REQ-NF-05 (RAII memory management), DeviceSettings backend Colorimetry scenarios.
 - 2026-07-24 — openspec-templater — Updated `getCurrentColorimetry` property section: corrected interface method from `CurrentColorimetry(ColorimetryType&)` to `GetCurrentColorimetry(ColorimetryTypeInfo& info)`, revised condition table to reflect port-iteration strategy, explicit `dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN → COLORIMETRY_UNKNOWN` case, and `default → COLORIMETRY_OTHER`; added `GetCurrentColorimetry` to Covered Code for DeviceSettings and RPI backends; added 11 new `CurrentColorimetry_*` L1 test cases to Conformance Testing table.
 - 2026-08-20 — Aligned `STBCapabilities` and `TVCapabilities` using common `BuildHDRCapabilities()` which maps `dsHDRSTANDARD_Invalid -> HDR_OFF` and `dsHDRSTANDARD_SDR -> HDR_SDR`.
+- 2026-09-25 — displayinfo-framerate-change-event change — Added REQ-F-12 and DeviceSettings frame-rate change scenarios; added `FRAMERATE_CHANGE` to the `updated` event `Source` table; documented `InitializeFrameRate()` (called from `DisplayInfo::Initialize`, DeviceSettings/Linux/RPI return codes); added `InitializeFrameRate`/`IsFrameRateChanged` to Covered Code; added `InitializeFrameRate_Success` and `InitializeFrameRate_ExceptionHandling` L1 tests and extended `ResolutionChange_NotificationTest` coverage note.
