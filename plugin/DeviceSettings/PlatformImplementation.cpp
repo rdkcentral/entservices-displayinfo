@@ -173,7 +173,7 @@ public:
     void OnResolutionPostChange(int width, int height) override
     {
         LOGINFO("OnResolutionPostChange: width %d, height %d",width, height);
-        if(DisplayInfoImplementation::_instance)
+        if (DisplayInfoImplementation::_instance)
         {
            bool isFrameRateChanged = DisplayInfoImplementation::_instance->IsFrameRateChanged();
            if (isFrameRateChanged) {
