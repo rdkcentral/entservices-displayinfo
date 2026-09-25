@@ -37,6 +37,9 @@
 #include "UtilsLogging.h"
 #include "host.hpp"
 
+#include <thread>
+#include <chrono>
+
 #define EDID_MAX_HORIZONTAL_SIZE 21
 #define EDID_MAX_VERTICAL_SIZE   22
 
@@ -103,6 +106,10 @@ public:
         {
            LOGERR("device::Manager::Initialize failed with unknown exception");
         }
+
+        // device::Manager::Initialize() can return before the HAL is fully up; cache the
+        // initial frame rate off-thread, retrying with a delay if the query still fails.
+        std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this).detach();
     }
 
     DisplayInfoImplementation(const DisplayInfoImplementation&) = delete;
@@ -214,30 +221,44 @@ public:
         return changed;
     }
 
-    Core::hresult InitializeFrameRate() override
+    void CacheInitialFrameRateAsync()
     {
-        Core::hresult result = Core::ERROR_GENERAL;
-        _frameRateLock.Lock();
-        try
-        {
-            result = FrameRate(_cachedFrameRate);
-            LOGINFO("caching initial frame rate = %d", static_cast<int>(_cachedFrameRate));
-        }
-        catch(const device::Exception& err)
-        {
-           LOGERR("frame-rate cache failed: code=%d, message=%s", err.getCode(), err.what());
-        }
-        catch(const std::exception& e)
-        {
-           LOGERR("frame-rate cache failed: %s", e.what());
-        }
-        catch(...)
-        {
-           LOGERR("frame-rate cache failed with unknown exception");
-        }
-        _frameRateLock.Unlock();
+        static constexpr uint32_t kRetryDelaySeconds = 1;
+        static constexpr uint32_t kMaxAttempts = 2;
 
-        return result;
+        for (uint32_t attempt = 1; attempt <= kMaxAttempts; ++attempt)
+        {
+
+            std::this_thread::sleep_for(std::chrono::seconds(kRetryDelaySeconds));
+            Core::hresult result = Core::ERROR_GENERAL;
+            _frameRateLock.Lock();
+            try
+            {
+                result = FrameRate(_cachedFrameRate);
+                LOGINFO("caching initial frame rate = %d", static_cast<int>(_cachedFrameRate));
+            }
+            catch(const device::Exception& err)
+            {
+               LOGERR("frame-rate cache failed: code=%d, message=%s", err.getCode(), err.what());
+            }
+            catch(const std::exception& e)
+            {
+               LOGERR("frame-rate cache failed: %s", e.what());
+            }
+            catch(...)
+            {
+               LOGERR("frame-rate cache failed with unknown exception");
+            }
+            _frameRateLock.Unlock();
+
+            if (result == Core::ERROR_NONE) {
+                return;
+            }
+
+            LOGERR("initial frame-rate cache attempt %u/%u failed, HAL may not be ready yet", attempt, kMaxAttempts);
+        }
+
+        LOGERR("Failed to do caching of initial frame rate after %u attempts", kMaxAttempts);
     }
 
     void ResolutionChangeImpl(IConnectionProperties::INotification::Source eventtype)
