@@ -119,15 +119,13 @@ private:
         void OnResolutionPreChange(
             const Exchange::IDeviceSettingsVideoPort::ResolutionChange& /* resolution */) override
         {
-            _parent.DispatchResolutionChange(
-                IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
+            _parent.dispatchEvent(EV_RESOLUTION_PRE_CHANGE);
         }
 
         void OnResolutionPostChange(
             const Exchange::IDeviceSettingsVideoPort::ResolutionChange& /* resolution */) override
         {
-            _parent.DispatchResolutionChange(
-                IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
+            _parent.dispatchEvent(EV_RESOLUTION_POST_CHANGE);
         }
 
         BEGIN_INTERFACE_MAP(DSVideoPortNotification)
@@ -138,26 +136,37 @@ private:
         DisplayInfoImplementation& _parent;
     };
 
-    // Job submitted to the worker pool by DispatchResolutionChange.
-    // Holds a reference to the implementation + source; calls Dispatch(source)
-    // on the worker thread so the DS notification thread returns immediately.
+    // Event types for worker pool dispatch
+    enum Event {
+        EV_RESOLUTION_PRE_CHANGE = 0,
+        EV_RESOLUTION_POST_CHANGE,
+        EV_DS_ACTIVATED_INIT,
+    };
+
+    // Unified dispatch job for worker pool.
+    // Handles all events through a single Event enum-based interface.
     class DispatchJob : public Core::IDispatch {
     public:
-        DispatchJob(DisplayInfoImplementation* impl,
-                           IConnectionProperties::INotification::Source src)
-            : _impl(impl), _src(src) { if (_impl != nullptr) _impl->AddRef(); }
+        DispatchJob(DisplayInfoImplementation* impl, Event ev)
+            : _impl(impl), _event(ev)
+        { 
+            if (_impl != nullptr) _impl->AddRef(); 
+        }
+        
         ~DispatchJob() { if (_impl != nullptr) _impl->Release(); }
+        
         static Core::ProxyType<Core::IDispatch> Create(
-            DisplayInfoImplementation* impl,
-            IConnectionProperties::INotification::Source src)
+            DisplayInfoImplementation* impl, Event ev)
         {
             return Core::ProxyType<Core::IDispatch>(
-                Core::ProxyType<DispatchJob>::Create(impl, src));
+                Core::ProxyType<DispatchJob>::Create(impl, ev));
         }
-        void Dispatch() override { _impl->Dispatch(_src); }
+        
+        void Dispatch() override { _impl->Dispatch(_event); }
+        
     private:
         DisplayInfoImplementation* _impl;
-        IConnectionProperties::INotification::Source _src;
+        Event _event;
     };
 
 public:
@@ -204,30 +213,20 @@ public:
 
     /**
      * Called when the DeviceSettings plugin activates (or re-activates after a
-     * crash/restart).  Caches the default port type, registers the resolution
-     * change notification delegate, and acquires the display handle needed for
-     * EDID queries.  All config stores are loaded lazily by DSHelper on the
-     * first accessor call — no explicit LoadVideoPortConfig/LoadAudioConfig/
-     * LoadVideoDeviceConfig calls are needed here.
+     * crash/restart).  Registers the resolution change notification delegate and
+     * dispatches initialization work to a worker thread to avoid deadlock.
+     * 
+     * IMPORTANT: This override is invoked from the smart-interface activation
+     * notification, which holds the PluginMonitor CriticalSection. Doing DSHelper
+     * config work here takes the DSHelper config mutex in the opposite order to a
+     * concurrent JSON-RPC call (config mutex -> CriticalSection) and can deadlock.
+     * All config queries and handle acquisition are deferred to DispatchInit().
      */
     void OnDeviceSettingsActivated() override
     {
-        LOGINFO("DisplayInfo: DeviceSettings activated — caching handles and registering notifications");
+        LOGINFO("DisplayInfo: DeviceSettings activated — registering notifications and dispatching init");
 
-        // ---- 1. Set default port type from DSHelper config ----
-        const std::string defaultVP = DSHelper::getDefaultVideoPortName();
-        VideoPortEntry defaultEntry{};
-        const bool entryResolved = DSHelper::resolveVideoPortByName(defaultVP, defaultEntry);
-        if (entryResolved) {
-            _defaultPortType = defaultEntry.type;
-            LOGINFO("Default video port: '%s' type=%d handle=%d",
-                    defaultVP.c_str(), static_cast<int>(_defaultPortType),
-                    DSHelper::getCachedVideoPortHandle(defaultVP));
-        } else {
-            LOGERR("OnDeviceSettingsActivated: failed to resolve default video port '%s'", defaultVP.c_str());
-        }
-
-        // ---- 2. Register resolution change notifications ----
+        // ---- 1. Register resolution change notifications ----
         {
             auto* vp = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoPort>();
             if (vp != nullptr) {
@@ -238,26 +237,14 @@ public:
             }
         }
 
-        // ---- 3. Acquire display handle for the default port ----
-        // Display handles are not cached by DSHelper::LoadAllConfigs — acquire explicitly.
-        _displayHandle = INVALID_DS_HANDLE;
-        if (entryResolved && DSHelper::getCachedVideoPortHandle(defaultVP) != INVALID_DS_HANDLE) {
-            auto* disp = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
-            if (disp != nullptr) {
-                Exchange::IDeviceSettingsDisplay::DisplayPortType dpType =
-                    static_cast<Exchange::IDeviceSettingsDisplay::DisplayPortType>(defaultEntry.type);
-                Core::hresult rc = disp->GetDisplay(dpType, defaultEntry.index, _displayHandle);
-                disp->Release();
-                if (rc != Core::ERROR_NONE) {
-                    LOGERR("OnDeviceSettingsActivated: GetDisplay failed: %u", rc);
-                    _displayHandle = INVALID_DS_HANDLE;
-                } else {
-                    LOGINFO("Cached display handle: %d", _displayHandle);
-                }
-            } else {
-                LOGERR("OnDeviceSettingsActivated: IDeviceSettingsDisplay not available");
-            }
-        }
+        // ---- 2. Reset cached handles ----
+        _displayHandle   = INVALID_DS_HANDLE;
+        _defaultPortType = VideoPortType::DS_VIDEO_PORT_TYPE_HDMI;
+
+        // ---- 3. Dispatch config queries and handle acquisition to worker thread ----
+        // This avoids deadlock by not calling DSHelper config methods (getDefaultVideoPortName,
+        // resolveVideoPortByName, getCachedVideoPortHandle) from the activation notification.
+        dispatchEvent(EV_DS_ACTIVATED_INIT);
     }
 
     /**
@@ -1079,17 +1066,83 @@ private:
         return rc;
     }
 
-    /** Dispatch a resolution change event to all registered INotification sinks. */
-    void DispatchResolutionChange(IConnectionProperties::INotification::Source source)
+    /** Submit an event to the worker pool for asynchronous processing. */
+    void dispatchEvent(Event ev)
     {
-        Core::IWorkerPool::Instance().Submit(DispatchJob::Create(this, source));
+        Core::IWorkerPool::Instance().Submit(DispatchJob::Create(this, ev));
     }
 
-    void Dispatch(IConnectionProperties::INotification::Source source)
+    /**
+     * Unified dispatch handler called on a worker thread.
+     * Routes events to appropriate handlers based on event type.
+     */
+    void Dispatch(Event ev)
     {
-        _adminLock.Lock();
-        for (auto* obs : _observers) obs->Updated(source);
-        _adminLock.Unlock();
+        if (ev == EV_RESOLUTION_PRE_CHANGE) {
+            LOGINFO("Dispatch - EV_RESOLUTION_PRE_CHANGE");
+            // Handle pre-resolution change notification
+            _adminLock.Lock();
+            for (auto* obs : _observers) {
+                obs->Updated(IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
+            }
+            _adminLock.Unlock();
+        } else if (ev == EV_RESOLUTION_POST_CHANGE) {
+            LOGINFO("Dispatch - EV_RESOLUTION_POST_CHANGE");
+            // Handle post-resolution change notification
+            _adminLock.Lock();
+            for (auto* obs : _observers) {
+                obs->Updated(IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
+            }
+            _adminLock.Unlock();
+        } else if (ev == EV_DS_ACTIVATED_INIT) {
+            LOGINFO("Dispatch - EV_DS_ACTIVATED_INIT");
+            // Handle initialization on worker thread
+            DispatchInit();
+        }
+    }
+
+    /**
+     * Initialization dispatch handler called on a worker thread.
+     * Performs config queries and display handle acquisition that would deadlock
+     * if called directly from OnDeviceSettingsActivated().
+     */
+    void DispatchInit()
+    {
+        LOGINFO("DisplayInfo: DispatchInit — caching handles on worker thread");
+
+        // ---- 1. Set default port type from DSHelper config ----
+        const std::string defaultVP = DSHelper::getDefaultVideoPortName();
+        VideoPortEntry defaultEntry{};
+        const bool entryResolved = DSHelper::resolveVideoPortByName(defaultVP, defaultEntry);
+        if (entryResolved) {
+            _defaultPortType = defaultEntry.type;
+            LOGINFO("Default video port: '%s' type=%d handle=%d",
+                    defaultVP.c_str(), static_cast<int>(_defaultPortType),
+                    DSHelper::getCachedVideoPortHandle(defaultVP));
+        } else {
+            LOGERR("DispatchInit: failed to resolve default video port '%s'", defaultVP.c_str());
+        }
+
+        // ---- 2. Acquire display handle for the default port ----
+        // Display handles are not cached by DSHelper::LoadAllConfigs — acquire explicitly.
+        _displayHandle = INVALID_DS_HANDLE;
+        if (entryResolved && DSHelper::getCachedVideoPortHandle(defaultVP) != INVALID_DS_HANDLE) {
+            auto* disp = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
+            if (disp != nullptr) {
+                Exchange::IDeviceSettingsDisplay::DisplayPortType dpType =
+                    static_cast<Exchange::IDeviceSettingsDisplay::DisplayPortType>(defaultEntry.type);
+                Core::hresult rc = disp->GetDisplay(dpType, defaultEntry.index, _displayHandle);
+                disp->Release();
+                if (rc != Core::ERROR_NONE) {
+                    LOGERR("DispatchInit: GetDisplay failed: %u", rc);
+                    _displayHandle = INVALID_DS_HANDLE;
+                } else {
+                    LOGINFO("Cached display handle: %d", _displayHandle);
+                }
+            } else {
+                LOGERR("DispatchInit: IDeviceSettingsDisplay not available");
+            }
+        }
     }
 
     mutable Core::CriticalSection                    _adminLock;
