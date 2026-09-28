@@ -4,9 +4,8 @@
 
 This spec captures the requirements added or modified in the
 `displayinfo-framerate-change-event` change: a new `FRAMERATE_CHANGE` source for the
-`Updated` JSON-RPC event, a new `InitializeFrameRate()` interface method, and the
-DeviceSettings backend logic that caches and diffs the active frame rate on every
-resolution-change callback.
+`Updated` JSON-RPC event, and the DeviceSettings backend logic that caches (asynchronously,
+at construction time) and diffs the active frame rate on every resolution-change callback.
 
 ---
 
@@ -16,9 +15,10 @@ Prior to this change, `Exchange::IConnectionProperties::INotification::Source` o
 defined `PRE_RESOLUTION_CHANGE`, `POST_RESOLUTION_CHANGE`, `HDMI_CHANGE`, and
 `HDCP_CHANGE`. Clients had no event-driven way to learn that the active frame rate
 changed as a side effect of a resolution change. This delta adds `FRAMERATE_CHANGE`,
-a paired `InitializeFrameRate()` interface method used to seed a baseline cache at
-plugin startup, and the DeviceSettings backend implementation that compares the
-current frame rate against the cache on every `OnResolutionPostChange` callback.
+an asynchronous baseline-cache seed (`CacheInitialFrameRateAsync()`, spawned from the
+`DisplayInfoImplementation` constructor) at plugin startup, and the DeviceSettings
+backend implementation that compares the current frame rate against the cache on
+every `OnResolutionPostChange` callback.
 
 ---
 
@@ -40,36 +40,26 @@ whenever the active frame rate of the primary video output changes.
 - **THEN** the plugin SHALL NOT emit `Updated(FRAMERATE_CHANGE)`
 - **THEN** the plugin SHALL still emit `Updated(POST_RESOLUTION_CHANGE)` as before
 
-### Requirement: Frame rate is cached during plugin initialization
-`Exchange::IConnectionProperties` SHALL expose `InitializeFrameRate()`, which the
-`DisplayInfo` plugin SHALL call once, immediately after acquiring the
-`IConnectionProperties` interface in `Initialize()` and before registering
-notification observers.
+### Requirement: Frame rate is cached asynchronously at construction time
+The DeviceSettings backend SHALL seed the frame-rate cache by spawning a detached
+background thread (`CacheInitialFrameRateAsync()`) from the `DisplayInfoImplementation`
+constructor, so the first `OnResolutionPostChange` callback has a best-effort baseline
+to diff against without blocking plugin `Initialize()`.
 
-#### Scenario: Plugin initialization caches the current frame rate
-- **WHEN** `DisplayInfo::Initialize` successfully acquires `_connectionProperties`
-- **THEN** it SHALL call `_connectionProperties->InitializeFrameRate()` before
-  `_connectionProperties->Register(&_notification)`
+#### Scenario: Constructor spawns the frame-rate cache thread
+- **WHEN** `DisplayInfoImplementation` is constructed
+- **THEN** it SHALL spawn a detached thread running `CacheInitialFrameRateAsync()`
 
-#### Scenario: InitializeFrameRate succeeds (DeviceSettings backend)
+#### Scenario: CacheInitialFrameRateAsync succeeds (DeviceSettings backend)
 - **WHEN** the current resolution/frame rate is readable
-- **THEN** `InitializeFrameRate()` SHALL cache the mapped `FrameRateType` value
-- **THEN** `InitializeFrameRate()` SHALL return `ERROR_NONE`
+- **THEN** `CacheInitialFrameRateAsync()` SHALL cache the mapped `FrameRateType` value
+  and return without retrying
 
-#### Scenario: InitializeFrameRate fails (DeviceSettings backend)
+#### Scenario: CacheInitialFrameRateAsync retries on failure (DeviceSettings backend)
 - **WHEN** a `device::Exception`, `std::exception`, or unknown exception is thrown
-  while reading the resolution/frame rate
-- **THEN** `InitializeFrameRate()` SHALL return `ERROR_GENERAL`
-- **THEN** the cached frame rate SHALL retain its last-known value (unmodified on
-  exception)
-
-#### Scenario: InitializeFrameRate on Linux/DRM backend
-- **WHEN** `InitializeFrameRate()` is called on the Linux/DRM backend
-- **THEN** it SHALL return `ERROR_NOT_SUPPORTED`
-
-#### Scenario: InitializeFrameRate on BCM/RPI backend
-- **WHEN** `InitializeFrameRate()` is called on the BCM/RPI backend
-- **THEN** it SHALL return `ERROR_UNAVAILABLE`
+  while reading the resolution/frame rate on the first attempt
+- **THEN** it SHALL wait a fixed delay and retry once more before giving up
+- **THEN** the cached frame rate SHALL retain its last-known value if all attempts fail
 
 ### Requirement: Frame rate change detection reuses the existing FrameRate getter
 The DeviceSettings backend SHALL detect frame-rate changes by invoking the same
@@ -105,19 +95,14 @@ change for the caching/locking decisions._
 |-------|---------|
 | `FRAMERATE_CHANGE` | The active frame rate on the primary video output changed, detected during a resolution-change callback |
 
-### Interface method – `InitializeFrameRate` (new)
+### Interface method – `CacheInitialFrameRateAsync` (new, internal)
 
-**Interface method:** `Exchange::IConnectionProperties::InitializeFrameRate()`
+**Method:** `DisplayInfoImplementation::CacheInitialFrameRateAsync()` (DeviceSettings backend only)
 
-Not exposed as a JSON-RPC property — called internally by `DisplayInfo::Initialize`
-to seed the frame-rate cache.
-
-| Condition | Return code |
-|-----------|-------------|
-| Resolution/frame rate readable (DeviceSettings) | `ERROR_NONE` |
-| `device::Exception` / `std::exception` / unknown exception (DeviceSettings) | `ERROR_GENERAL` |
-| Linux/DRM backend | `ERROR_NOT_SUPPORTED` |
-| BCM/RPI backend | `ERROR_UNAVAILABLE` |
+Not exposed as a JSON-RPC property or an `Exchange::IConnectionProperties` interface
+method — spawned as a detached thread from the `DisplayInfoImplementation` constructor
+to seed the frame-rate cache. Failures are logged and retried once after a fixed
+delay; there is no return value surfaced to callers.
 
 ---
 
@@ -132,17 +117,16 @@ resolution-change event, bounded by the same latency characteristics as the exis
 
 ## Security
 
-_Not applicable — no new externally-reachable input surface; `InitializeFrameRate()`
-is not exposed as a JSON-RPC method and the new `Source` enum value carries no
-payload._
+_Not applicable — no new externally-reachable input surface; `CacheInitialFrameRateAsync()`
+is an internal backend detail, not exposed as a JSON-RPC method or interface method,
+and the new `Source` enum value carries no payload._
 
 ---
 
 ## Versioning & Compatibility
 
-Additive change: a new `Source` enum value and a new interface method. Existing
-clients that switch on `Source` and ignore unknown values are unaffected. No breaking
-changes.
+Additive change: a new `Source` enum value only. Existing clients that switch on
+`Source` and ignore unknown values are unaffected. No breaking changes.
 
 ---
 
@@ -150,27 +134,18 @@ changes.
 
 | Test name | Coverage |
 |-----------|----------|
-| `InitializeFrameRate_Success` | `InitializeFrameRate()` caches the current frame rate and returns `ERROR_NONE` |
-| `InitializeFrameRate_ExceptionHandling` | `InitializeFrameRate()` returns `ERROR_GENERAL` when the underlying resolution query throws |
-| `ResolutionChange_NotificationTest` (extended) | `Updated(FRAMERATE_CHANGE)` fires only when the queried frame rate differs from the cached value; not fired when unchanged; fired alongside `Updated(POST_RESOLUTION_CHANGE)` |
+| `ResolutionChange_NotificationTest` (extended) | `Updated(FRAMERATE_CHANGE)` fires only when the queried frame rate differs from the cached value; not fired when unchanged; fired alongside `Updated(POST_RESOLUTION_CHANGE)`; baseline seeded via an `OnResolutionPostChange` callback since there is no interface method to call directly |
 
 ---
 
 ## Covered Code
 
-- `plugin/DisplayInfo.cpp`:
-    - `DisplayInfo::Initialize` (added `_connectionProperties->InitializeFrameRate()` call)
 - `plugin/DeviceSettings/PlatformImplementation.cpp`:
-    - `DisplayInfoImplementation::InitializeFrameRate`
+    - `DisplayInfoImplementation::DisplayInfoImplementation` (spawns the detached cache thread)
+    - `DisplayInfoImplementation::CacheInitialFrameRateAsync`
     - `DisplayInfoImplementation::IsFrameRateChanged`
     - `DisplayInfoImplementation::OnResolutionPostChange` (emits `FRAMERATE_CHANGE`)
-- `plugin/Linux/PlatformImplementation.cpp`:
-    - `DisplayInfoImplementation::InitializeFrameRate` (stub — `ERROR_NOT_SUPPORTED`)
-- `plugin/RPI/PlatformImplementation.cpp`:
-    - `DisplayInfoImplementation::InitializeFrameRate` (stub — `ERROR_UNAVAILABLE`)
 - `Tests/L1Tests/tests/test_DisplayInfo.cpp`:
-    - `DisplayInfoTestTest::InitializeFrameRate_Success`
-    - `DisplayInfoTestTest::InitializeFrameRate_ExceptionHandling`
     - `DisplayInfoTestTest::ResolutionChange_NotificationTest` (extended with
       `FRAMERATE_CHANGE` scenario)
 
@@ -178,9 +153,9 @@ changes.
 
 ## Open Queries
 
-- **OQ-01:** Should `InitializeFrameRate()`'s return value be surfaced through
-  `DisplayInfo::Initialize`'s `message` output, or remain silently ignored? Currently
-  ignored, consistent with other best-effort calls in `Initialize`.
+- **OQ-01:** Should `CacheInitialFrameRateAsync()`'s failure be surfaced anywhere
+  beyond a log line, or remain silently best-effort as it is today? Currently
+  silent/best-effort.
 - **OQ-02:** Should Linux/DRM and BCM/RPI backends eventually implement real
   frame-rate change detection? Tracked as a future change; out of scope here.
 
@@ -198,3 +173,10 @@ changes.
 - 2026-09-25 — displayinfo-framerate-change-event change — Delta requirements defined:
   `FRAMERATE_CHANGE` source, `InitializeFrameRate()` interface method, DeviceSettings
   backend caching/diff logic.
+- 2026-09-28 — displayinfo-framerate-change-event change (revised) — Removed the
+  `InitializeFrameRate()` interface method; the DeviceSettings backend now seeds the
+  frame-rate cache asynchronously via `CacheInitialFrameRateAsync()`, spawned as a
+  detached thread from the `DisplayInfoImplementation` constructor with one retry.
+  Removed the Linux/RPI stub scenarios and Covered Code entries (no longer
+  applicable); `ResolutionChange_NotificationTest` seeds its baseline via
+  `OnResolutionPostChange` instead of the removed interface method.

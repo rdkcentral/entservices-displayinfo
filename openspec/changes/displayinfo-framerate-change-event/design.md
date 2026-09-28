@@ -41,16 +41,27 @@ keeps a single source of truth for frame-rate resolution and mapping.
 `IsFrameRateChanged()`. Rejected — would duplicate the try/catch and enum-mapping logic
 already in `FrameRate()`.
 
-### D-02: Cache is populated by a dedicated `InitializeFrameRate()` interface method, called during `DisplayInfo::Initialize`
+### D-02: Cache is populated asynchronously by `CacheInitialFrameRateAsync()`, spawned from the `DisplayInfoImplementation` constructor
 
-Rather than lazily populating the cache on the first `OnResolutionPostChange`, the cache
-is deliberately seeded during plugin initialization via
-`_connectionProperties->InitializeFrameRate()`. This guarantees:
-- The cache is never compared against its default-constructed value
-  (`FRAMERATE_UNKNOWN`) on the first real resolution-change event, which would
-  otherwise spuriously fire `FRAMERATE_CHANGE` on the very first callback after startup.
-- The cache is ready before any observer registers, since `Initialize()` calls
-  `InitializeFrameRate()` before `_connectionProperties->Register(&_notification)`.
+Rather than lazily populating the cache on the first `OnResolutionPostChange`, the
+DeviceSettings backend spawns a detached thread from its constructor
+(`std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this).detach()`)
+that queries `FrameRate()` and seeds `_cachedFrameRate`, retrying once after a fixed
+delay if the first attempt fails. This guarantees:
+- The cache is populated best-effort even though `device::Manager::Initialize()` can
+  return before the underlying HAL is fully ready — the retry absorbs that race
+  without blocking plugin `Initialize()`.
+- No public interface method is required, since the caching is purely an
+  implementation detail of the DeviceSettings backend and does not need to be invoked
+  from `DisplayInfo::Initialize` or exposed on `Exchange::IConnectionProperties`.
+
+**Alternative considered (originally implemented):** A dedicated
+`Exchange::IConnectionProperties::InitializeFrameRate()` interface method, called
+synchronously by `DisplayInfo::Initialize` before registering notification observers.
+Superseded — it required an interface change in `entservices-apis` and stub overrides
+on every backend, and still raced the HAL if `device::Manager::Initialize()` hadn't
+fully come up by the time `Initialize()` ran. The async, backend-internal approach
+removes both problems without widening the public interface.
 
 **Alternative considered:** Lazily initialize the cache on first use inside
 `IsFrameRateChanged()` (treat `FRAMERATE_UNKNOWN` cache as "no baseline, skip compare").
@@ -73,32 +84,25 @@ distinct from `_adminLock` which guards the observer list. This avoids holding t
 observer lock while making a (potentially blocking) DeviceSettings library call inside
 `FrameRate()`.
 
-### D-05: Linux and RPI backends stub `InitializeFrameRate()` with distinct error codes
+### D-05: Linux and RPI backends do not implement frame-rate caching
 
-- Linux/DRM: `Core::ERROR_NOT_SUPPORTED` — the backend has no frame-rate concept wired
-  up at all.
-- BCM/RPI: `Core::ERROR_UNAVAILABLE` — consistent with the existing pattern for other
-  stubbed `IDisplayProperties`/`IConnectionProperties` methods on that backend.
-
-`DisplayInfo::Initialize` ignores the return value of `InitializeFrameRate()` (best
-effort, matching the existing pattern for other non-fatal interface calls in
-`Initialize`) so plugin activation is never blocked by a backend that doesn't support
-frame-rate caching.
+Only the DeviceSettings backend caches and diffs the frame rate; there is no
+interface method for Linux/RPI to stub, so no changes are required in those backends
+for this feature.
 
 ## Risks / Trade-offs
 
 | Risk | Mitigation |
 |------|-----------|
-| `InitializeFrameRate()` runs during `Initialize()`, before test/mock backends may be wired up (L1 fixture ordering) | L1 fixture reordered so `VideoOutputPort`/`VideoResolution`/other device mocks are installed via `setImpl` before `dispatcher->Activate()`/`plugin->Initialize()` |
-| `FrameRate()` can throw/return an error if the DS library call fails | `IsFrameRateChanged()` wraps the call in the same try/catch as `FrameRate()`; on failure `newRate` stays `FRAMERATE_UNKNOWN`, which is compared and cached like any other value |
+| `CacheInitialFrameRateAsync()` runs on a detached thread started from the constructor, before test/mock backends may be wired up (L1 fixture ordering) | L1 fixture reordered so `VideoOutputPort`/`VideoResolution`/other device mocks are installed via `setImpl` before `dispatcher->Activate()`/`plugin->Initialize()` |
+| `FrameRate()` can throw/return an error if the DS library call fails | `IsFrameRateChanged()` wraps the call in the same try/catch as `FrameRate()`; on failure `newRate` stays `FRAMERATE_UNKNOWN`, which is compared and cached like any other value; `CacheInitialFrameRateAsync()` retries once after a fixed delay before giving up |
 | False-positive `FRAMERATE_CHANGE` on repeated `OnResolutionPostChange` calls with an unchanged rate | Comparison against `_cachedFrameRate` under `_frameRateLock` prevents duplicate notifications |
 
 ## Open Questions
 
-- **OQ-01:** Should `InitializeFrameRate()`'s return value be surfaced to
-  `DisplayInfo::Initialize`'s `message` (i.e. treated as a soft failure worth logging),
-  or remain silently ignored as it is today? Currently ignored, consistent with other
-  best-effort calls in `Initialize`.
+- **OQ-01:** Should `CacheInitialFrameRateAsync()`'s failure be surfaced anywhere
+  beyond a log line (e.g. a diagnostic property), or remain silently best-effort as it
+  is today? Currently silent/best-effort.
 - **OQ-02:** Should Linux/DRM and BCM/RPI backends eventually implement real frame-rate
   change detection (via DRM mode-set callbacks / `vc_dispmanx` respectively)? Tracked as
   a future change; out of scope here.
