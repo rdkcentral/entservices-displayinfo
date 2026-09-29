@@ -44,10 +44,13 @@ already in `FrameRate()`.
 ### D-02: Cache is populated asynchronously by `CacheInitialFrameRateAsync()`, spawned from the `DisplayInfoImplementation` constructor
 
 Rather than lazily populating the cache on the first `OnResolutionPostChange`, the
-DeviceSettings backend spawns a detached thread from its constructor
-(`std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this).detach()`)
+DeviceSettings backend spawns a background thread from its constructor
+(`_frameRateCacheThread = std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this)`)
 that queries `FrameRate()` and seeds `_cachedFrameRate`, retrying once after a fixed
-delay if the first attempt fails. This guarantees:
+delay if the first attempt fails. The thread is kept joinable (not detached): the
+destructor joins it before any other teardown proceeds, so it can never touch `this`
+after destruction has started.
+This guarantees:
 - The cache is populated best-effort even though `device::Manager::Initialize()` can
   return before the underlying HAL is fully ready — the retry absorbs that race
   without blocking plugin `Initialize()`.
@@ -94,9 +97,10 @@ for this feature.
 
 | Risk | Mitigation |
 |------|-----------|
-| `CacheInitialFrameRateAsync()` runs on a detached thread started from the constructor, before test/mock backends may be wired up (L1 fixture ordering) | L1 fixture reordered so `VideoOutputPort`/`VideoResolution`/other device mocks are installed via `setImpl` before `dispatcher->Activate()`/`plugin->Initialize()` |
+| `CacheInitialFrameRateAsync()` runs on a background thread started from the constructor, before test/mock backends may be wired up (L1 fixture ordering) | L1 fixture reordered so `VideoOutputPort`/`VideoResolution`/other device mocks are installed via `setImpl` before `dispatcher->Activate()`/`plugin->Initialize()` |
 | `FrameRate()` can throw/return an error if the DS library call fails | `IsFrameRateChanged()` wraps the call in the same try/catch as `FrameRate()`; on failure `newRate` stays `FRAMERATE_UNKNOWN`, which is compared and cached like any other value; `CacheInitialFrameRateAsync()` retries once after a fixed delay before giving up |
 | False-positive `FRAMERATE_CHANGE` on repeated `OnResolutionPostChange` calls with an unchanged rate | Comparison against `_cachedFrameRate` under `_frameRateLock` prevents duplicate notifications |
+| **(Found via L1 testing)** A detached background thread can outlive the `DisplayInfoImplementation` object that spawned it (e.g. if the object is destroyed while the thread is still sleeping/querying), causing a use-after-free when the thread later touches `this` or backend singletons the object depended on | `_frameRateCacheThread` is kept joinable (not detached); the destructor joins it before any other teardown proceeds, so the thread can never run after the object starts being destroyed. This can block destruction for up to ~2s if torn down while the thread is still sleeping/retrying — accepted, since this window is only realistically hit in fast construct/destroy test cycles, not real device operation |
 
 ## Open Questions
 

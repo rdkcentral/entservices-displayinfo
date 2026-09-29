@@ -41,14 +41,14 @@ whenever the active frame rate of the primary video output changes.
 - **THEN** the plugin SHALL still emit `Updated(POST_RESOLUTION_CHANGE)` as before
 
 ### Requirement: Frame rate is cached asynchronously at construction time
-The DeviceSettings backend SHALL seed the frame-rate cache by spawning a detached
+The DeviceSettings backend SHALL seed the frame-rate cache by spawning a joinable
 background thread (`CacheInitialFrameRateAsync()`) from the `DisplayInfoImplementation`
 constructor, so the first `OnResolutionPostChange` callback has a best-effort baseline
 to diff against without blocking plugin `Initialize()`.
 
 #### Scenario: Constructor spawns the frame-rate cache thread
 - **WHEN** `DisplayInfoImplementation` is constructed
-- **THEN** it SHALL spawn a detached thread running `CacheInitialFrameRateAsync()`
+- **THEN** it SHALL spawn a joinable background thread running `CacheInitialFrameRateAsync()`
 
 #### Scenario: CacheInitialFrameRateAsync succeeds (DeviceSettings backend)
 - **WHEN** the current resolution/frame rate is readable
@@ -60,6 +60,12 @@ to diff against without blocking plugin `Initialize()`.
   while reading the resolution/frame rate on the first attempt
 - **THEN** it SHALL wait a fixed delay and retry once more before giving up
 - **THEN** the cached frame rate SHALL retain its last-known value if all attempts fail
+
+#### Scenario: Destructor safely stops the cache thread
+- **WHEN** `DisplayInfoImplementation` is destructed while `CacheInitialFrameRateAsync()`
+  is still sleeping between attempts or executing
+- **THEN** the destructor SHALL join the thread before any other teardown proceeds, so
+  the thread never touches `this` after destruction has started
 
 ### Requirement: Frame rate change detection reuses the existing FrameRate getter
 The DeviceSettings backend SHALL detect frame-rate changes by invoking the same
@@ -100,9 +106,10 @@ change for the caching/locking decisions._
 **Method:** `DisplayInfoImplementation::CacheInitialFrameRateAsync()` (DeviceSettings backend only)
 
 Not exposed as a JSON-RPC property or an `Exchange::IConnectionProperties` interface
-method — spawned as a detached thread from the `DisplayInfoImplementation` constructor
-to seed the frame-rate cache. Failures are logged and retried once after a fixed
-delay; there is no return value surfaced to callers.
+method — spawned as a joinable background thread from the `DisplayInfoImplementation`
+constructor to seed the frame-rate cache. Failures are logged and retried once after a
+fixed delay; there is no return value surfaced to callers. The destructor joins this
+thread before any other teardown, guaranteeing it cannot outlive the object.
 
 ---
 
@@ -134,20 +141,24 @@ Additive change: a new `Source` enum value only. Existing clients that switch on
 
 | Test name | Coverage |
 |-----------|----------|
-| `ResolutionChange_NotificationTest` (extended) | `Updated(FRAMERATE_CHANGE)` fires only when the queried frame rate differs from the cached value; not fired when unchanged; fired alongside `Updated(POST_RESOLUTION_CHANGE)`; baseline seeded via an `OnResolutionPostChange` callback since there is no interface method to call directly |
+| `ResolutionChange_NotificationTest` (extended) | `Updated(FRAMERATE_CHANGE)` fires only when the queried frame rate differs from the cached value; not fired when unchanged; fired alongside `Updated(POST_RESOLUTION_CHANGE)`; baseline seeded directly via an `OnResolutionPostChange` callback to exercise `IsFrameRateChanged()`'s diff logic in isolation |
+| `FrameRateChange_InitialCacheAsyncAtActivation` (new) | Exercises the real constructor-spawned `CacheInitialFrameRateAsync()` path end-to-end: mocks a 1080p60 display before `DisplayInfoImplementation` is constructed via `Root<>()`, waits for the background thread to cache `FRAMERATE_60`, then asserts no `FRAMERATE_CHANGE` when the rate is unchanged and `FRAMERATE_CHANGE` alongside `POST_RESOLUTION_CHANGE` when it changes to 50 |
 
 ---
 
 ## Covered Code
 
 - `plugin/DeviceSettings/PlatformImplementation.cpp`:
-    - `DisplayInfoImplementation::DisplayInfoImplementation` (spawns the detached cache thread)
+    - `DisplayInfoImplementation::DisplayInfoImplementation` (spawns the joinable cache thread)
+    - `DisplayInfoImplementation::~DisplayInfoImplementation` (signals shutdown and joins the cache thread)
     - `DisplayInfoImplementation::CacheInitialFrameRateAsync`
     - `DisplayInfoImplementation::IsFrameRateChanged`
     - `DisplayInfoImplementation::OnResolutionPostChange` (emits `FRAMERATE_CHANGE`)
 - `Tests/L1Tests/tests/test_DisplayInfo.cpp`:
+    - `DisplayInfoNotificationHandler` (file-scope helper shared by both tests below)
     - `DisplayInfoTestTest::ResolutionChange_NotificationTest` (extended with
       `FRAMERATE_CHANGE` scenario)
+    - `DisplayInfoTestTest::FrameRateChange_InitialCacheAsyncAtActivation` (new)
 
 ---
 
@@ -180,3 +191,17 @@ Additive change: a new `Source` enum value only. Existing clients that switch on
   Removed the Linux/RPI stub scenarios and Covered Code entries (no longer
   applicable); `ResolutionChange_NotificationTest` seeds its baseline via
   `OnResolutionPostChange` instead of the removed interface method.
+- 2026-09-29 — displayinfo-framerate-change-event change (revised again) — Added
+  `FrameRateChange_InitialCacheAsyncAtActivation`, a dedicated L1 test that exercises
+  the real constructor-spawned `CacheInitialFrameRateAsync()` path (1080p60 baseline,
+  unchanged-vs-changed-rate scenarios) rather than manually seeding the cache; hoisted
+  the shared `DisplayInfoNotificationHandler` test helper to file scope so both
+  notification tests can reuse it; updated Conformance Testing and Covered Code.
+- 2026-09-29 — displayinfo-framerate-change-event change (bugfix) — Fixed a
+  use-after-free: `CacheInitialFrameRateAsync()`'s thread was detached and could
+  outlive `DisplayInfoImplementation`, later touching a destroyed object/mocks (root
+  cause of an L1 segfault and `getFrameRate()` mock-saturation failures once the new
+  async-activation test gave the background thread enough real time to run). The
+  thread is now kept joinable; the destructor joins it before any other teardown
+  proceeds. Added the "Destructor safely stops the cache thread" scenario and updated
+  Covered Code.

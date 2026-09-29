@@ -109,7 +109,9 @@ public:
 
         // device::Manager::Initialize() can return before the HAL is fully up; cache the
         // initial frame rate off-thread, retrying with a delay if the query still fails.
-        std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this).detach();
+        // Kept joinable (not detached) so the destructor can safely wait for it to finish
+        // before `this` is torn down.
+        _frameRateCacheThread = std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this);
     }
 
     DisplayInfoImplementation(const DisplayInfoImplementation&) = delete;
@@ -117,6 +119,12 @@ public:
 
     virtual ~DisplayInfoImplementation()
     {
+        // Wait for the background caching thread to finish so it can never touch `this`
+        // after destruction has started.
+        if (_frameRateCacheThread.joinable()) {
+            _frameRateCacheThread.join();
+        }
+
         device::Host::getInstance().UnRegister(baseInterface<device::Host::IVideoOutputPortEvents>());
         DisplayInfoImplementation::_instance = nullptr;
     }
@@ -228,8 +236,8 @@ public:
 
         for (uint32_t attempt = 1; attempt <= kMaxAttempts; ++attempt)
         {
-
             std::this_thread::sleep_for(std::chrono::seconds(kRetryDelaySeconds));
+
             Core::hresult result = Core::ERROR_GENERAL;
             _frameRateLock.Lock();
             try
@@ -1007,6 +1015,7 @@ private:
     mutable Core::CriticalSection _adminLock;
     mutable Core::CriticalSection _frameRateLock;
     FrameRateType _cachedFrameRate { FRAMERATE_UNKNOWN };
+    std::thread _frameRateCacheThread;
 
 private:
     uint32_t GetEdidBytes(std::vector<uint8_t> &edid) const

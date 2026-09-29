@@ -13,8 +13,10 @@ change).
 - Add a new `Source` enum value `FRAMERATE_CHANGE` to the existing `Updated` JSON-RPC
   event (interface change in `entservices-apis` / `Exchange::IConnectionProperties::INotification::Source`).
 - The DeviceSettings backend caches the frame rate once, asynchronously, by spawning a
-  detached thread (`CacheInitialFrameRateAsync()`) from the `DisplayInfoImplementation`
-  constructor, retrying once after a fixed delay if the HAL isn't ready yet.
+  joinable background thread (`CacheInitialFrameRateAsync()`) from the
+  `DisplayInfoImplementation` constructor, retrying once after a fixed delay if the HAL
+  isn't ready yet. The destructor signals and joins this thread before any other
+  teardown, so it can never outlive the object it operates on.
 - On every `OnResolutionPostChange` callback, the DeviceSettings backend re-queries the
   frame rate via the existing `FrameRate()` getter, compares it against the cached
   value, and updates the cache.
