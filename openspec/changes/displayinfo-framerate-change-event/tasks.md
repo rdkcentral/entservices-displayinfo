@@ -11,6 +11,7 @@
 - [x] 2.3 Implement `CacheInitialFrameRateAsync()`: spawned as a joinable thread from the `DisplayInfoImplementation` constructor; queries `FrameRate(_cachedFrameRate)` under `_frameRateLock`, wraps in typed exception handlers, and retries once after a fixed delay if the first attempt fails (replaces the originally-planned `InitializeFrameRate()` interface method)
 - [x] 2.4 Update `OnResolutionPostChange()` to call `IsFrameRateChanged()` and, if true, call `ResolutionChangeImpl(FRAMERATE_CHANGE)` before the existing `ResolutionChangeImpl(POST_RESOLUTION_CHANGE)` call
 - [x] 2.5 **(Bugfix)** Fix use-after-free: keep `_frameRateCacheThread` joinable (not detached); in `~DisplayInfoImplementation()` join the thread before any other teardown, so it can never touch `this` after destruction has started
+- [x] 2.6 **(Test bugfix)** The join fix stops threads from outliving their object, but a `DisplayInfoImplementation` still live for a test's duration (e.g. the fixture's `SetUp()`-created instance) can legitimately call `getFrameRate()` via its own background thread while a test elsewhere holds a strict `EXPECT_CALL(...).WillOnce(...)` on the same shared mock. Changed `FrameRate` and `ResolutionChange_NotificationTest`'s `getFrameRate()` expectations from `EXPECT_CALL(...).WillOnce(...)` to `ON_CALL(...).WillByDefault(...)`, since the tests only assert on the explicit call's return value, not on call count
 
 ## 3. Plugin Initialization
 
