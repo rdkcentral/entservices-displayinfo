@@ -28,6 +28,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <vector>
 #include <boost/filesystem.hpp>
 
 #include "../../../plugin/DeviceSettings/PlatformImplementation.cpp"
@@ -77,6 +78,11 @@ class DisplayInfoTest : public ::testing::Test {
 protected:
     Core::ProxyType<Plugin::DisplayInfo> plugin;
     Core::ProxyType<Plugin::DisplayInfoImplementation> displayInfoImplementation;
+    // Every Root<>()/Instantiate() call below creates a brand new DisplayInfoImplementation
+    // (each spawning its own CacheInitialFrameRateAsync() background thread), not just the
+    // first one assigned to displayInfoImplementation. Track all of them so every one can be
+    // released - and its thread joined - while the mocks below are still installed.
+    std::vector<Core::ProxyType<Plugin::DisplayInfoImplementation>> _allDisplayInfoImplementations;
     Core::JSONRPC::Handler& handler;
     DECL_CORE_JSONRPC_CONX connection;
     NiceMock<ServiceMock> service;
@@ -140,6 +146,7 @@ protected:
             .WillByDefault(::testing::Invoke(
                     [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
                         displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
+                        _allDisplayInfoImplementations.push_back(displayInfoImplementation);
                         TEST_LOG("Pass created displayInfoImplementation: %p ", &displayInfoImplementation);
                         return &displayInfoImplementation;
                 }));
@@ -190,6 +197,20 @@ protected:
     virtual ~DisplayInfoTest()
     {
         plugin->Deinitialize(&service);
+
+        // Every instance created via the COMLink Instantiate() mock (see _allDisplayInfoImplementations)
+        // holds a fixture-owned reference separate from whatever Deinitialize()/the test body released,
+        // so each object would otherwise survive until this fixture's members are destroyed - i.e. after
+        // the mocks below are torn down. Release them all now, while the mocks are still installed, so
+        // each object's destructor (which joins its CacheInitialFrameRateAsync() background thread) runs
+        // at a safe time.
+        for (auto& impl : _allDisplayInfoImplementations) {
+            if (impl.IsValid()) {
+                impl.Release();
+            }
+        }
+        _allDisplayInfoImplementations.clear();
+
         dispatcher->Deactivate();
         dispatcher->Release();
         
@@ -1019,6 +1040,7 @@ protected:
         }
     
         colorimetry->Release();
+        displayProperties->Release();
     }
 
     /**
