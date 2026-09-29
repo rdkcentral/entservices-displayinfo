@@ -820,8 +820,11 @@ protected:
         };
         
         for (const auto& test : testCases) {
-            EXPECT_CALL(*p_videoResolutionMock, getFrameRate())
-                .WillOnce(::testing::ReturnRef(test.frames));
+            // ON_CALL (not EXPECT_CALL) since a concurrently-alive DisplayInfoImplementation's
+            // own CacheInitialFrameRateAsync() background thread may also call getFrameRate();
+            // a strict call-count expectation would flake against that harmless extra call.
+            ON_CALL(*p_videoResolutionMock, getFrameRate())
+                .WillByDefault(::testing::ReturnRef(test.frames));
 
             // Act: Call the FrameRate function via the COMRPC interface
 
@@ -2049,17 +2052,19 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         // callback, exercising IsFrameRateChanged()'s diff logic in isolation. The real
         // constructor-spawned CacheInitialFrameRateAsync() path is covered separately by
         // FrameRateChange_InitialCacheAsyncAtActivation below.
+        // ON_CALL (not EXPECT_CALL) since a concurrently-alive DisplayInfoImplementation's
+        // own background caching thread may also call getFrameRate() against this mock.
         notification.Reset();
-        EXPECT_CALL(*p_videoResolutionMock, getFrameRate())
-            .WillOnce(::testing::ReturnRef(frameRate24));
+        ON_CALL(*p_videoResolutionMock, getFrameRate())
+            .WillByDefault(::testing::ReturnRef(frameRate24));
         Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 1920, 1080 );
         EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
 
         notification.Reset();
 
         // Frame rate unchanged - no FRAMERATE_CHANGE expected
-        EXPECT_CALL(*p_videoResolutionMock, getFrameRate())
-            .WillOnce(::testing::ReturnRef(frameRate24));
+        ON_CALL(*p_videoResolutionMock, getFrameRate())
+            .WillByDefault(::testing::ReturnRef(frameRate24));
         Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 1920, 1080 );
 
         EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
@@ -2068,8 +2073,8 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         notification.Reset();
 
         // Frame rate changes to 60 fps - FRAMERATE_CHANGE expected alongside POST_RESOLUTION_CHANGE
-        EXPECT_CALL(*p_videoResolutionMock, getFrameRate())
-            .WillOnce(::testing::ReturnRef(frameRate60));
+        ON_CALL(*p_videoResolutionMock, getFrameRate())
+            .WillByDefault(::testing::ReturnRef(frameRate60));
         Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 3840, 2160 );
 
         EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE));
