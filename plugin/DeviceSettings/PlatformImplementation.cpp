@@ -262,8 +262,6 @@ public:
             if (result == Core::ERROR_NONE) {
                 return;
             }
-
-            LOGERR("initial frame-rate cache attempt %u/%u failed, HAL may not be ready yet", attempt, kMaxAttempts);
         }
 
         LOGERR("Failed to do caching of initial frame rate after %u attempts", kMaxAttempts);
