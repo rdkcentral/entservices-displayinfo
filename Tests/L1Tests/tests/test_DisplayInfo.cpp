@@ -148,6 +148,7 @@ protected:
                         displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
                         _allDisplayInfoImplementations.push_back(displayInfoImplementation);
                         TEST_LOG("Pass created displayInfoImplementation: %p ", &displayInfoImplementation);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2200));
                         return &displayInfoImplementation;
                 }));
 #else
