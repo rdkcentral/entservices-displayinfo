@@ -191,6 +191,11 @@ protected:
         p_videoDeviceMock = new NiceMock <VideoDeviceMock>;
         device::VideoDevice::setImpl(p_videoDeviceMock);
 
+        ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
+            .WillByDefault(::testing::ReturnRef(videoOutputPort));
+        ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+            .WillByDefault(::testing::Return(false));
+
         dispatcher = static_cast<PLUGINHOST_DISPATCHER*>(
         plugin->QueryInterface(PLUGINHOST_DISPATCHER_ID));
         dispatcher->Activate(&service);
