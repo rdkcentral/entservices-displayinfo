@@ -111,7 +111,11 @@ public:
         // initial frame rate off-thread, retrying with a delay if the query still fails.
         // Kept joinable (not detached) so the destructor can safely wait for it to finish
         // before `this` is torn down.
-        _frameRateCacheThread = std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this);
+        try {
+            _frameRateCacheThread = std::thread(&DisplayInfoImplementation::CacheInitialFrameRateAsync, this);
+        } catch (const std::system_error& error) {
+            LOGERR("Failed to start frame-rate cache thread: %s", error.what());
+        }
     }
 
     DisplayInfoImplementation(const DisplayInfoImplementation&) = delete;
