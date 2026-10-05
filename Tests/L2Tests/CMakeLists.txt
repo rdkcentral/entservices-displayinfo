@@ -54,6 +54,11 @@ if(PLUGIN_FRAMERATE)
     set(SRC_FILES ${SRC_FILES} tests/FrameRate_L2Test.cpp)
 endif()
 
+if(NOT SRC_FILES)
+    message(STATUS "No DisplayInfo L2 test sources enabled; skipping ${MODULE_NAME}")
+    return()
+endif()
+
 add_library(${MODULE_NAME} SHARED ${SRC_FILES})
 
 set_target_properties(${MODULE_NAME} PROPERTIES

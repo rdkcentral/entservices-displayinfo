@@ -13,7 +13,7 @@ env:
   THUNDER_TOOLS_COMMIT_SHA: "d5dd83c7c19c49c7f25c558c126500bd2d64f7a4"
   THUNDER_COMMIT_SHA: "2c0fcc5529e7da734be558ca6efa05d934dcce31"
   INTERFACES_REF: "develop"
-  RDK_SERVICE_L2_TEST: "ON"
+  RDK_SERVICE_L2_TEST: "OFF"
   AUTOMATICS_UNAME: ${{ secrets.AUTOMATICS_UNAME}}
   AUTOMATICS_PASSCODE: ${{ secrets. AUTOMATICS_PASSCODE}}
 
@@ -106,7 +106,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: 26d155fef59a431ae6f65dff16f5d6dc4f3152e3
+          ref: c5e12df47a5f77788d69f9fa5dc5f684bfce74d7
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
