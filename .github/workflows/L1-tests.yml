@@ -137,7 +137,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-displayinfo
           path: entservices-displayinfo
-          ref: develop
+          ref: feature/RDKEMW-24427_2
 
       - name: Checkout googletest
         uses: actions/checkout@v3
@@ -185,7 +185,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-apis
           path: entservices-apis
-          ref: feature/RDKEMW-22037_2
+          ref: feature/RDKEMW-24427_3
           run: rm -rf $GITHUB_WORKSPACE/entservices-apis/jsonrpc/DTV.json
 
       - name: Apply patches entservices-apis
