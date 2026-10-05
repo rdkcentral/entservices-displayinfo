@@ -106,6 +106,17 @@ protected:
     Exchange::IConnectionProperties::INotification *ConnectionProperties = nullptr;
     NiceMock<COMLinkMock> comLinkMock;
 
+    // Fixture-lifetime backing objects for tests that bind them via ReturnRef(...) to mocks
+    // CacheInitialFrameRateAsync()'s background worker can still call after a TEST_F body
+    // returns (and before ~DisplayInfoTest() joins every spawned worker). Declaring these as
+    // TEST_F-local objects instead would let that worker dereference freed stack memory.
+    device::VideoOutputPort videoOutputPort;
+    device::VideoResolution videoResolution;
+    device::PixelResolution pixelResolution;
+    device::FrameRate frameRate24{dsVIDEO_FRAMERATE_24};
+    device::FrameRate frameRate50{dsVIDEO_FRAMERATE_50};
+    device::FrameRate frameRate60{dsVIDEO_FRAMERATE_60};
+
     DisplayInfoTest()
     : plugin(Core::ProxyType<Plugin::DisplayInfo>::Create())
     , handler(*(plugin))
@@ -148,7 +159,6 @@ protected:
                         displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
                         _allDisplayInfoImplementations.push_back(displayInfoImplementation);
                         TEST_LOG("Pass created displayInfoImplementation: %p ", &displayInfoImplementation);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(2200));
                         return &displayInfoImplementation;
                 }));
 #else
@@ -795,10 +805,7 @@ protected:
 
     TEST_F(DisplayInfoTestTest, FrameRate)
     {
-        device::VideoOutputPort videoOutputPort;
         device::AudioOutputPort audioOutputPort;
-        device::VideoResolution videoResolution;
-        device::PixelResolution pixelResolution;
         device::VideoOutputPortType videoOutputPortType(dsVIDEOPORT_TYPE_HDMI);
         std::string videoName = "HDMI-1";
         
@@ -857,7 +864,11 @@ protected:
             EXPECT_EQ(result, Core::ERROR_NONE);
             EXPECT_EQ(rate, test.expected);
         }
-    
+
+        // Rebind away from the now-about-to-be-destroyed testCases array to a fixture-lifetime
+        // value, so a still-pending CacheInitialFrameRateAsync() worker can't dereference it.
+        ON_CALL(*p_videoResolutionMock, getFrameRate())
+            .WillByDefault(::testing::ReturnRef(frameRate60));
         displayProperties->Release();
     }
 
@@ -1468,8 +1479,6 @@ TEST_F(DisplayInfoTestTest, ColorSpace_ExceptionHandling)
 
 TEST_F(DisplayInfoTestTest, FrameRate_ExceptionHandling)
 {
-    device::VideoOutputPort videoOutputPort;
-    device::VideoResolution videoResolution;
     string videoPort(_T("HDMI0"));
 
     ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
@@ -1495,7 +1504,7 @@ TEST_F(DisplayInfoTestTest, FrameRate_ExceptionHandling)
     uint32_t result = displayProperties->FrameRate(rate);
 
     EXPECT_EQ(result, Core::ERROR_GENERAL);
-    
+
     displayProperties->Release();
 }
 
@@ -2053,11 +2062,6 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
 
     // Test FRAMERATE_CHANGE event - only fired when the frame rate differs from the cached value
     {
-        device::VideoOutputPort videoOutputPort;
-        device::VideoResolution videoResolution;
-        device::PixelResolution pixelResolution;
-        device::FrameRate frameRate24(dsVIDEO_FRAMERATE_24);
-        device::FrameRate frameRate60(dsVIDEO_FRAMERATE_60);
         string videoPort(_T("HDMI0"));
 
         ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
