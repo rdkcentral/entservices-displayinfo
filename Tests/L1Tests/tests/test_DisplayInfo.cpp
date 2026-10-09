@@ -47,9 +47,7 @@
 #include <chrono>
 
 #include "FactoriesImplementation.h"
-#include "HostMock.h"
 #include "ServiceMock.h"
-#include "VideoDeviceMock.h"
 #include "DeviceSettingsMock.h"
 #include "DeviceSettingsAudioMock.h"
 #include "DeviceSettingsDisplayMock.h"
