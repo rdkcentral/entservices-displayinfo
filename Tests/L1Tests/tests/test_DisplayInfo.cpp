@@ -38,8 +38,6 @@
 #include "DisplayInfo.h"
 #include "DisplayInfoMock.h"
 
-#include "ManagerMock.h"
-
 #include <fstream>
 #include "ThunderPortability.h"
 
@@ -86,7 +84,6 @@ protected:
     DECL_CORE_JSONRPC_CONX connection;
     NiceMock<ServiceMock> service;
     PLUGINHOST_DISPATCHER *dispatcher;
-    ManagerImplMock   *p_managerImplMock = nullptr ;
     ConnectionPropertiesMock* p_connectionpropertiesMock = nullptr;
     Core::ProxyType<WorkerPoolImplementation> workerPool;
     bool workerPoolAssigned = false;
@@ -396,9 +393,6 @@ protected:
 	    p_wrapsImplMock = new NiceMock<WrapsImplMock>;
         Wraps::setImpl(p_wrapsImplMock);
 
-        p_managerImplMock  = new NiceMock <ManagerImplMock>;
-        device::Manager::setImpl(p_managerImplMock);
-
         if (!Core::IWorkerPool::IsAvailable()) {
             Core::IWorkerPool::Assign(&(*workerPool));
             workerPool->Run();
@@ -450,10 +444,6 @@ protected:
                         return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #endif /*USE_THUNDER_R4 */
-
-        EXPECT_CALL(*p_managerImplMock, Initialize())
-            .Times(::testing::AnyNumber())
-            .WillRepeatedly(::testing::Return());
 
         PluginHost::IFactories::Assign(&factoriesImplementation);
 
@@ -547,12 +537,6 @@ protected:
         }
            
         
-        device::Manager::setImpl(nullptr);
-        if (p_managerImplMock != nullptr)
-        {
-            delete p_managerImplMock;
-            p_managerImplMock = nullptr;
-        }
         if (p_connectionpropertiesMock != nullptr) {
             delete p_connectionpropertiesMock;
             p_connectionpropertiesMock = nullptr;
