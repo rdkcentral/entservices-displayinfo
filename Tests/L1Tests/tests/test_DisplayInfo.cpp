@@ -41,7 +41,6 @@
 #include <fstream>
 #include "ThunderPortability.h"
 
-#include "VideoResolutionMock.h"
 #include "DrmMock.h"
 
 #include <thread>
