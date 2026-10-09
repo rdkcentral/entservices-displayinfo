@@ -41,9 +41,6 @@
 #include <fstream>
 #include "ThunderPortability.h"
 
-#include "drm.h"
-#include "DrmMock.h"
-
 #include <thread>
 #include <chrono>
 
@@ -84,7 +81,6 @@ protected:
     NiceMock<FactoriesImplementation> factoriesImplementation;
     ServiceMock  *p_serviceMock  = nullptr;
     WrapsImplMock* p_wrapsImplMock = nullptr;
-    DRMMock *p_drmMock = nullptr;
     IARM_EventHandler_t _iarmDisplayInfoPreChangeEventHandler = nullptr;
     IARM_EventHandler_t _iarmDisplayInfoPowtChangeEventHandler = nullptr;
     Exchange::IConnectionProperties::INotification *ConnectionProperties = nullptr;
@@ -284,9 +280,6 @@ protected:
                      displayInfoImplementation->getDefaultVideoPortName()),
                  static_cast<int>(displayInfoImplementation->IsOperational()));
 
-        p_drmMock  = new NiceMock <DRMMock>;
-        drmImpl::setImpl(p_drmMock);
-
         ON_CALL(*p_connectionpropertiesMock, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
                 [&](Exchange::IConnectionProperties::INotification* notification) {
@@ -323,12 +316,6 @@ protected:
         if (p_wrapsImplMock != nullptr) {
             delete p_wrapsImplMock;
             p_wrapsImplMock = nullptr;
-        }
-
-        drmImpl::setImpl(nullptr);
-        if (p_drmMock != nullptr)
-        {
-            delete p_drmMock;
         }
 
         if (p_connectionpropertiesMock != nullptr) {
