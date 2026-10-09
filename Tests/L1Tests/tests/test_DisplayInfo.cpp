@@ -41,6 +41,7 @@
 #include <fstream>
 #include "ThunderPortability.h"
 
+#include "drm.h"
 #include "DrmMock.h"
 
 #include <thread>
@@ -2051,20 +2052,8 @@ TEST_F(DisplayInfoTestTest, STBCapabilities_ExceptionHandling)
 
 TEST_F(DisplayInfoTestTest, EDID_ExceptionHandling)
 {
-    device::VideoOutputPort videoOutputPort;
-    string videoPort(_T("HDMI0"));
-
-    ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
-        .WillByDefault(::testing::Return(videoPort));
-    ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
-        .WillByDefault(::testing::ReturnRef(videoOutputPort));
-    
-    // Mock to throw exception
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Invoke([]() {
-            throw device::Exception("EDID device exception");
-            return 0;
-        }));
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     uint32_t _connectionId = 0;
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
