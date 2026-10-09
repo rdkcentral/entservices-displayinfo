@@ -2555,28 +2555,18 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_DeviceException)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_AllMappings)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-
     struct {
-        dsDisplayMatrixCoefficients_t input;
+        Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients input;
         Exchange::IDisplayProperties::ColorimetryType expected;
     } testCases[] = {
-        {dsDISPLAY_MATRIXCOEFFICIENT_BT_709,                         Exchange::IDisplayProperties::COLORIMETRY_BT709},
-        {dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M,                     Exchange::IDisplayProperties::COLORIMETRY_SMPTE170M},
-        {dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709,                      Exchange::IDisplayProperties::COLORIMETRY_XVYCC709},
-        {dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601,                     Exchange::IDisplayProperties::COLORIMETRY_XVYCC601},
-        {dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL,                    Exchange::IDisplayProperties::COLORIMETRY_BT2020RGB_YCBCR},
-        {dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL,                     Exchange::IDisplayProperties::COLORIMETRY_BT2020YCCBCBRC},
-        {dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN,                        Exchange::IDisplayProperties::COLORIMETRY_UNKNOWN},
-        {static_cast<dsDisplayMatrixCoefficients_t>(9999),           Exchange::IDisplayProperties::COLORIMETRY_OTHER},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709, Exchange::IDisplayProperties::COLORIMETRY_BT709},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_SMPTE_170M, Exchange::IDisplayProperties::COLORIMETRY_SMPTE170M},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_XVYCC_709, Exchange::IDisplayProperties::COLORIMETRY_XVYCC709},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_EXVYCC_601, Exchange::IDisplayProperties::COLORIMETRY_XVYCC601},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL, Exchange::IDisplayProperties::COLORIMETRY_BT2020RGB_YCBCR},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_CL, Exchange::IDisplayProperties::COLORIMETRY_BT2020YCCBCBRC},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN, Exchange::IDisplayProperties::COLORIMETRY_UNKNOWN},
+        {static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(9999), Exchange::IDisplayProperties::COLORIMETRY_OTHER},
     };
 
     uint32_t _connectionId = 0;
@@ -2584,8 +2574,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_AllMappings)
     ASSERT_NE(displayProperties, nullptr);
 
     for (const auto& tc : testCases) {
-        EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-            .WillOnce(::testing::Return(static_cast<int>(tc.input)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+            .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(tc.input), ::testing::Return(Core::ERROR_NONE)));
 
         Exchange::IDisplayProperties::ColorimetryTypeInfo info;
         info.colorimetry = Exchange::IDisplayProperties::COLORIMETRY_OTHER;
