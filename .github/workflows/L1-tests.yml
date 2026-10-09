@@ -363,9 +363,7 @@ jobs:
           -DHAS_API_SYSTEM
           -DHAS_API_POWERSTATE
           -DHAS_RBUS
-          -D_DRM_MODE_H
           -DENABLE_DEVICE_MANUFACTURER_INFO"
-          -D_DRM_MODE_H=ON
           &&
           cmake --build build/mocks -j8
           &&
@@ -425,7 +423,6 @@ jobs:
           -DUSE_DRM_SCREENCAPTURE
           -DHAS_API_SYSTEM
           -DHAS_API_POWERSTATE
-          -D_DRM_MODE_H=ON
           -DHAS_RBUS
           -DENABLE_DEVICE_MANUFACTURER_INFO"
           -DCOMCAST_CONFIG=OFF
@@ -502,7 +499,6 @@ jobs:
           -DUSE_DRM_SCREENCAPTURE
           -DHAS_API_SYSTEM
           -DHAS_API_POWERSTATE
-          -D_DRM_MODE_H=ON
           -DHAS_RBUS
           -DENABLE_DEVICE_MANUFACTURER_INFO"
           -DCOMCAST_CONFIG=OFF
