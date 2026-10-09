@@ -2235,7 +2235,7 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_NoDisplayConnected)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_DeviceException)
 {
-    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPort(::testing::_, ::testing::_, ::testing::_))
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
         .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     uint32_t _connectionId = 0;
