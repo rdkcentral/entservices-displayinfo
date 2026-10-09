@@ -2258,17 +2258,8 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT709)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_BT_709)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2289,17 +2280,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT709)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020NCL)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2320,17 +2302,10 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020NCL)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020CL)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(
+            ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_CL),
+            ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2351,17 +2326,10 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020CL)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_SMPTE170M)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(
+            ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_SMPTE_170M),
+            ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2382,17 +2350,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_SMPTE170M)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC709)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_XVYCC_709), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2413,17 +2372,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC709)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC601)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_EXVYCC_601), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2444,17 +2394,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC601)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_DSUnknownSentinel)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2475,18 +2416,11 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_DSUnknownSentinel)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_GenuinelyUnmapped)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
     // Use a value that is not MATRIXCOEFFICIENT_UNKNOWN and has no explicit mapping — hits default branch
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(9999)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(
+            ::testing::SetArgReferee<1>(static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(9999)),
+            ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2507,12 +2441,9 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_GenuinelyUnmapped)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_NoDisplayConnected)
 {
-    device::VideoOutputPort videoOutputPort;
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(false)); // no display connected
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
+        .WillByDefault(::testing::DoAll(
+            ::testing::SetArgReferee<1>(false), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2533,8 +2464,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_NoDisplayConnected)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_DeviceException)
 {
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Throw(device::Exception(1, "getVideoOutputPorts failed")));
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPort(::testing::_, ::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2574,7 +2505,7 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_AllMappings)
     ASSERT_NE(displayProperties, nullptr);
 
     for (const auto& tc : testCases) {
-        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
             .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(tc.input), ::testing::Return(Core::ERROR_NONE)));
 
         Exchange::IDisplayProperties::ColorimetryTypeInfo info;
