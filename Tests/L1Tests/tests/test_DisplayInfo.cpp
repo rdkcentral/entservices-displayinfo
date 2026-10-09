@@ -41,10 +41,7 @@
 #include <fstream>
 #include "ThunderPortability.h"
 
-#include "AudioOutputPortMock.h"
-#include "VideoOutputPortConfigMock.h"
 #include "VideoOutputPortMock.h"
-#include "VideoOutputPortTypeMock.h"
 #include "VideoResolutionMock.h"
 #include "DrmMock.h"
 
@@ -91,7 +88,6 @@ protected:
     ServiceMock  *p_serviceMock  = nullptr;
     WrapsImplMock* p_wrapsImplMock = nullptr;
     HostImplMock      *p_hostImplMock = nullptr ;
-    AudioOutputPortMock      *p_audioOutputPortMock = nullptr ;
     VideoOutputPortMock      *p_videoOutputPortMock = nullptr ;
     VideoResolutionMock      *p_videoResolutionMock = nullptr ;
     VideoDeviceMock      *p_videoDeviceMock = nullptr ;
@@ -140,9 +136,6 @@ protected:
         p_serviceMock = new NiceMock <ServiceMock>;
 
         p_connectionpropertiesMock  = new NiceMock <ConnectionPropertiesMock>;
-
-        p_audioOutputPortMock = new NiceMock<AudioOutputPortMock>;
-        device::AudioOutputPort::setImpl(p_audioOutputPortMock);
 
         p_videoResolutionMock = new NiceMock<VideoResolutionMock>;
         device::VideoResolution::setImpl(p_videoResolutionMock);
@@ -371,9 +364,7 @@ protected:
             .WillByDefault(::testing::Invoke(
                 [this](int32_t, Exchange::IDeviceSettingsAudio::StereoMode& value, bool) {
                     try {
-                        value = p_audioOutputPortMock->getStereoMode(false) == device::AudioStereoMode::kPassThru
-                            ? Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH
-                            : Exchange::IDeviceSettingsAudio::AUDIO_STEREO_UNKNOWN;
+                        value = Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH;
                         return Core::ERROR_NONE;
                     } catch (...) {
                         return Core::ERROR_GENERAL;
@@ -542,12 +533,6 @@ protected:
             p_connectionpropertiesMock = nullptr;
         }
 
-        device::AudioOutputPort::setImpl(nullptr);
-        if (p_audioOutputPortMock != nullptr)
-        {
-            delete p_audioOutputPortMock;
-            p_audioOutputPortMock = nullptr;
-        }
         device::VideoOutputPort::setImpl(nullptr);
         if (p_videoOutputPortMock != nullptr)
         {
@@ -622,9 +607,6 @@ protected:
             .WillByDefault(::testing::ReturnRef(display));
 
         // Audio passthrough
-        ON_CALL(*p_audioOutputPortMock, getStereoMode(::testing::_))
-            .WillByDefault(::testing::Return(device::AudioStereoMode::kPassThru));
-
         EXPECT_CALL(*p_drmMock, drmModeGetResources(::testing::_))
             .Times(::testing::AnyNumber())
             .WillRepeatedly(::testing::Invoke([](int) {
@@ -1596,10 +1578,10 @@ TEST_F(DisplayInfoTestTest, IsAudioPassthrough_ExceptionHandling)
         .WillByDefault(::testing::Return(true));
     
     // Mock to throw exception
-    ON_CALL(*p_audioOutputPortMock, getStereoMode(::testing::_))
-        .WillByDefault(::testing::Invoke([](bool) {
+    ON_CALL(DeviceSettingsAudioMock::Mock(), GetStereoMode(::testing::_, ::testing::_, ::testing::_))
+        .WillByDefault(::testing::Invoke([](int32_t, Exchange::IDeviceSettingsAudio::StereoMode&, bool) {
             throw device::Exception("Audio device exception");
-            return false;
+            return Core::ERROR_GENERAL;
         }));
 
     uint32_t _connectionId = 0;
