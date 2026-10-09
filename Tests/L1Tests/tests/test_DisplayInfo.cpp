@@ -41,7 +41,6 @@
 #include <fstream>
 #include "ThunderPortability.h"
 
-#include "VideoOutputPortMock.h"
 #include "VideoResolutionMock.h"
 #include "DrmMock.h"
 
