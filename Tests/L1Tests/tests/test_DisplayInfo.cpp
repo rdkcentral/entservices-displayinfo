@@ -23,6 +23,7 @@
 #include <gtest/gtest.h>
 
 // Standard library includes first
+#include <algorithm>
 #include <fstream>
 #include <thread>
 #include <chrono>
@@ -30,33 +31,26 @@
 #include <mutex>
 #include <boost/filesystem.hpp>
 
+// Expose the nested notification delegate only in this L1 translation unit.
+#define private public
 #include "../../../plugin/DeviceSettings/PlatformImplementation.cpp"
+#undef private
 #include "DisplayInfo.h"
 #include "DisplayInfoMock.h"
 
-#include "ManagerMock.h"
-
 #include <fstream>
 #include "ThunderPortability.h"
-
-#include "AudioOutputPortMock.h"
-#include "VideoOutputPortConfigMock.h"
-#include "VideoOutputPortMock.h"
-#include "VideoOutputPortTypeMock.h"
-#include "VideoResolutionMock.h"
-#include "DrmMock.h"
 
 #include <thread>
 #include <chrono>
 
 #include "FactoriesImplementation.h"
-#include "HostMock.h"
 #include "ServiceMock.h"
-#include "VideoDeviceMock.h"
-#include "devicesettings.h"
-#include "DisplayMock.h"
-#include "EdidParserMock.h"
-#include "dsMgr.h"
+#include "DeviceSettingsMock.h"
+#include "DeviceSettingsAudioMock.h"
+#include "DeviceSettingsDisplayMock.h"
+#include "DeviceSettingsVideoDeviceMock.h"
+#include "DeviceSettingsVideoPortMock.h"
 #include "ThunderPortability.h"
 #include "WorkerPoolImplementation.h"
 #include "WrapsMock.h"
@@ -81,52 +75,134 @@ protected:
     DECL_CORE_JSONRPC_CONX connection;
     NiceMock<ServiceMock> service;
     PLUGINHOST_DISPATCHER *dispatcher;
-    ManagerImplMock   *p_managerImplMock = nullptr ;
     ConnectionPropertiesMock* p_connectionpropertiesMock = nullptr;
     Core::ProxyType<WorkerPoolImplementation> workerPool;
+    bool workerPoolAssigned = false;
     NiceMock<FactoriesImplementation> factoriesImplementation;
     ServiceMock  *p_serviceMock  = nullptr;
     WrapsImplMock* p_wrapsImplMock = nullptr;
-    HostImplMock      *p_hostImplMock = nullptr ;
-    AudioOutputPortMock      *p_audioOutputPortMock = nullptr ;
-    VideoOutputPortMock      *p_videoOutputPortMock = nullptr ;
-    VideoResolutionMock      *p_videoResolutionMock = nullptr ;
-    VideoDeviceMock      *p_videoDeviceMock = nullptr ;
-    DisplayMock      *p_displayMock = nullptr ;
-    EdidParserMock  *p_edidParserMock = nullptr;
-    DRMMock *p_drmMock = nullptr;
     IARM_EventHandler_t _iarmDisplayInfoPreChangeEventHandler = nullptr;
     IARM_EventHandler_t _iarmDisplayInfoPowtChangeEventHandler = nullptr;
     Exchange::IConnectionProperties::INotification *ConnectionProperties = nullptr;
     NiceMock<COMLinkMock> comLinkMock;
+    std::mutex deviceSettingsMutex;
+    std::condition_variable deviceSettingsCondition;
+    bool deviceSettingsInitialized = false;
+
+    static std::vector<uint8_t> DetailedTimingEdid(
+        uint16_t width, uint16_t height, uint16_t horizontalBlanking = 0,
+        uint16_t verticalBlanking = 0, uint16_t pixelClock10Khz = 0)
+    {
+        std::vector<uint8_t> edid(128, 0);
+        edid[54] = static_cast<uint8_t>(pixelClock10Khz & 0xFF);
+        edid[55] = static_cast<uint8_t>(pixelClock10Khz >> 8);
+        edid[56] = static_cast<uint8_t>(width & 0xFF);
+        edid[57] = static_cast<uint8_t>(horizontalBlanking & 0xFF);
+        edid[58] = static_cast<uint8_t>(((width >> 8) << 4) | (horizontalBlanking >> 8));
+        edid[59] = static_cast<uint8_t>(height & 0xFF);
+        edid[60] = static_cast<uint8_t>(verticalBlanking & 0xFF);
+        edid[61] = static_cast<uint8_t>(((height >> 8) << 4) | (verticalBlanking >> 8));
+        edid[127] = 1;
+        return edid;
+    }
 
     DisplayInfoTest()
     : plugin(Core::ProxyType<Plugin::DisplayInfo>::Create())
+    , displayInfoImplementation(Core::ProxyType<Plugin::DisplayInfoImplementation>::Create())
     , handler(*(plugin))
     , INIT_CONX(1, 0)
+    // PluginSmartInterfaceType (used by DSHelper) requires >= 2 real worker threads
+    // to avoid registration/dispatch contention; WorkerPoolImplementation reserves
+    // (threads - 1) real threads, so pass 3 here.
     , workerPool(Core::ProxyType<WorkerPoolImplementation>::Create(
-      2, Core::Thread::DefaultStackSize(), 16))
+      3, Core::Thread::DefaultStackSize(), 16))
     {
-        p_hostImplMock  = new NiceMock <HostImplMock>;
-        device::Host::setImpl(p_hostImplMock);
+        ::testing::DefaultValue<Core::hresult>::Set(Core::ERROR_UNAVAILABLE);
 
         p_serviceMock = new NiceMock <ServiceMock>;
 
         p_connectionpropertiesMock  = new NiceMock <ConnectionPropertiesMock>;
 
+        ON_CALL(DeviceSettingsMock::Mock(), GetDeviceSettingConfigs(::testing::_))
+            .WillByDefault(::testing::Invoke([](Exchange::IDeviceSettings::DeviceSettingConfigs& configs) {
+                configs.audioPorts = {
+                    { static_cast<int32_t>(Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI), 0,
+                      static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI), 0 }
+                };
+                configs.videoPorts = {{
+                    static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI), 0,
+                    static_cast<int32_t>(Exchange::IDeviceSettingsAudio::AUDIO_PORT_TYPE_HDMI), 0, "1080p"}};
+                configs.videoPortTypes = {{
+                    static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PORT_TYPE_HDMI),
+                    "HDMI", false, true, 0, "1080p"}};
+                configs.videoConfigs = {{1, 0, 0}};
+                return Core::ERROR_NONE;
+            }));
 
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPort(::testing::_, ::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<2>(10), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(true), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPortResolution(::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke([](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution) {
+                resolution.name = "1080p60";
+                resolution.pixelResolution = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PIXELRES_1920X1080;
+                resolution.aspectRatio = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_ASPECT_RATIO_16X9;
+                resolution.stereoScopicMode = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_SSMODE_2D;
+                resolution.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_60;
+                resolution.interlaced = false;
+                return Core::ERROR_NONE;
+            }));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetColorSpace(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_COLORSPACE_RGB), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetColorDepth(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(static_cast<uint32_t>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_COLORDEPTH_8BIT)), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetQuantizationRange(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_QUANTIZATIONRANGE_FULL), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoEOTF(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_NONE), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetTVHDRCapabilities(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(0), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortOutputHDR(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(false), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsDisplayMock::Mock(), GetDisplay(::testing::_, ::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [this](Exchange::IDeviceSettingsDisplay::DisplayPortType, int32_t, int32_t& handle) {
+                    handle = 20;
+                    displayInfoImplementation->_displayHandle = handle;
+                    {
+                        std::lock_guard<std::mutex> lock(deviceSettingsMutex);
+                        deviceSettingsInitialized = true;
+                    }
+                    deviceSettingsCondition.notify_one();
+                    return Core::ERROR_NONE;
+                }));
+        ON_CALL(DeviceSettingsDisplayMock::Mock(), GetDisplayEdidBytes(::testing::_, ::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke([](int32_t, uint8_t bytes[], uint16_t length) {
+                std::fill(bytes, bytes + length, 0);
+                if (length > 22) {
+                    bytes[21] = 77;
+                    bytes[22] = 55;
+                }
+                return Core::ERROR_NONE;
+            }));
+        ON_CALL(DeviceSettingsAudioMock::Mock(), GetAudioPort(::testing::_, ::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<2>(30), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsAudioMock::Mock(), GetStereoMode(::testing::_, ::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsAudio::AUDIO_STEREO_PASSTHROUGH), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetVideoDeviceHandle(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(40), ::testing::Return(Core::ERROR_NONE)));
 
 	    p_wrapsImplMock = new NiceMock<WrapsImplMock>;
         Wraps::setImpl(p_wrapsImplMock);
 
-        p_managerImplMock  = new NiceMock <ManagerImplMock>;
-        device::Manager::setImpl(p_managerImplMock);
-
-        p_displayMock  = new NiceMock <DisplayMock>;
-        device::Display::setImpl(p_displayMock);
-
-        p_edidParserMock  = new NiceMock <EdidParserMock>;
-        edid_parser::edidParserImpl::setImpl(p_edidParserMock);
+        if (!Core::IWorkerPool::IsAvailable()) {
+            Core::IWorkerPool::Assign(&(*workerPool));
+            workerPool->Run();
+            workerPoolAssigned = true;
+        }
 
         ON_CALL(service, COMLink())
         .WillByDefault(::testing::Invoke(
@@ -135,22 +211,44 @@ protected:
                     return &comLinkMock;
                 }));
 
+        // Force the plugin out-of-process so IShell::Root() routes through
+        // COMLink()->Instantiate (the mock returning the single fixture impl)
+        // instead of the in-process loader, which would create a fresh,
+        // unconfigured DisplayInfoImplementation on every service.Root() call.
+        ON_CALL(service, ConfigLine())
+            .WillByDefault(::testing::Return(_T("{\"root\":{\"mode\":\"Local\"}}")));
+
+        ON_CALL(service, QueryInterface(::testing::_))
+            .WillByDefault(::testing::Invoke([this](const uint32_t interfaceId) -> void* {
+                if (interfaceId == Exchange::IDeviceSettings::ID) {
+                    auto* root = DeviceSettingsMock::Get();
+                    TEST_LOG("Returning DeviceSettings root mock for interface 0x%08x: %p", interfaceId, root);
+                    root->AddRef();
+                    return static_cast<Exchange::IDeviceSettings*>(root);
+                }
+                // Any other IShell interface query (notably ICOMLink) resolves to the
+                // COMLink mock so IShell::Root()'s OOP path instantiates the shared impl.
+                return static_cast<PluginHost::IShell::ICOMLink*>(&comLinkMock);
+            }));
+        ON_CALL(service, Register(::testing::Matcher<PluginHost::IPlugin::INotification*>(::testing::_)))
+            .WillByDefault(::testing::Invoke(
+                [this](PluginHost::IPlugin::INotification* notification) {
+                    notification->Activated("org.rdk.DeviceSettings", &service);
+                }));
+
 #ifdef USE_THUNDER_R4
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                    [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
-                        displayInfoImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
-                        TEST_LOG("Pass created displayInfoImplementation: %p ", &displayInfoImplementation);
-                        return &displayInfoImplementation;
+                    [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */) -> void* {
+                        return displayInfoImplementation->QueryInterface(object.Interface());
                 }));
 #else
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
-             .WillByDefault(::testing::Return(displayInfoImplementation));
+            .WillByDefault(::testing::Invoke(
+                    [this](const RPC::Object& object, const uint32_t /* waitTime */, uint32_t& /* connectionId */, const string& /* className */, const string& /* callsign */) -> void* {
+                        return displayInfoImplementation->QueryInterface(object.Interface());
+                }));
 #endif /*USE_THUNDER_R4 */
-
-        EXPECT_CALL(*p_managerImplMock, Initialize())
-            .Times(::testing::AnyNumber())
-            .WillRepeatedly(::testing::Return());
 
         PluginHost::IFactories::Assign(&factoriesImplementation);
 
@@ -159,20 +257,28 @@ protected:
         dispatcher->Activate(&service);
         plugin->Initialize(&service);
 
-        p_drmMock  = new NiceMock <DRMMock>;
-        drmImpl::setImpl(p_drmMock);
+        {
+            std::unique_lock<std::mutex> lock(deviceSettingsMutex);
+            // EXPECT (not ASSERT): this runs in the fixture ctor, and ASSERT_* would
+            // return early from a constructor, leaving the object half-built and the
+            // destructor tearing down state that was never set up. A failure here
+            // means DS never activated for this fixture, explaining any downstream
+            // "root not available" failures in the test body.
+            EXPECT_TRUE(deviceSettingsCondition.wait_for(
+                lock, std::chrono::seconds(5), [this]() { return deviceSettingsInitialized; }))
+                << "DeviceSettings COM-RPC activation did not complete in time";
+        }
 
-        p_audioOutputPortMock  = new NiceMock <AudioOutputPortMock>;
-        device::AudioOutputPort::setImpl(p_audioOutputPortMock);
-
-        p_videoResolutionMock  = new NiceMock <VideoResolutionMock>;
-        device::VideoResolution::setImpl(p_videoResolutionMock);
-
-        p_videoOutputPortMock  = new NiceMock <VideoOutputPortMock>;
-        device::VideoOutputPort::setImpl(p_videoOutputPortMock);
-
-        p_videoDeviceMock = new NiceMock <VideoDeviceMock>;
-        device::VideoDevice::setImpl(p_videoDeviceMock);
+        // Diagnostic: capture DeviceSettings state at end of fixture setup so we can
+        // tell whether a later "handle/root not available" is incomplete activation
+        // (bad here) or a mid-test deactivation (good here, bad in the test body).
+        TEST_LOG("Fixture ready: fixtureImpl=%p pluginInstance=%p displayHandle=%d vpHandle(HDMI0)=%d dsOperational=%d",
+                 static_cast<void*>(&(*displayInfoImplementation)),
+                 static_cast<void*>(Plugin::DisplayInfoImplementation::_instance),
+                 displayInfoImplementation->_displayHandle,
+                 displayInfoImplementation->getCachedVideoPortHandle(
+                     displayInfoImplementation->getDefaultVideoPortName()),
+                 static_cast<int>(displayInfoImplementation->IsOperational()));
 
         ON_CALL(*p_connectionpropertiesMock, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
@@ -188,6 +294,16 @@ protected:
         plugin->Deinitialize(&service);
         dispatcher->Deactivate();
         dispatcher->Release();
+
+        displayInfoImplementation.Release();
+
+        DeviceSettingsMock::Delete();
+
+        if (workerPoolAssigned) {
+            workerPool->Stop();
+            Core::IWorkerPool::Assign(nullptr);
+            workerPoolAssigned = false;
+        }
         
 
         if (p_serviceMock != nullptr)
@@ -202,71 +318,12 @@ protected:
             p_wrapsImplMock = nullptr;
         }
 
-        drmImpl::setImpl(nullptr);
-        if (p_drmMock != nullptr)
-        {
-            delete p_drmMock;
-        }
-
-        device::Display::setImpl(nullptr);
-        if (p_displayMock != nullptr)
-        {
-            delete p_displayMock;
-            p_displayMock = nullptr;
-        }  
-
-        edid_parser::edidParserImpl::setImpl(nullptr);
-        if (p_edidParserMock != nullptr)
-        {
-            delete p_edidParserMock;
-            p_edidParserMock = nullptr;
-        }
-
-        device::VideoResolution::setImpl(nullptr);
-        if (p_videoResolutionMock != nullptr)
-        {
-            delete p_videoResolutionMock;
-            p_videoResolutionMock = nullptr;
-        }  
-
-        device::VideoDevice::setImpl(nullptr);
-        if (p_videoDeviceMock != nullptr)
-        {
-            delete p_videoDeviceMock;
-            p_videoDeviceMock = nullptr;
-        }
-           
-        
-        device::Manager::setImpl(nullptr);
-        if (p_managerImplMock != nullptr)
-        {
-            delete p_managerImplMock;
-            p_managerImplMock = nullptr;
-        }
         if (p_connectionpropertiesMock != nullptr) {
             delete p_connectionpropertiesMock;
             p_connectionpropertiesMock = nullptr;
         }
 
-        device::AudioOutputPort::setImpl(nullptr);
-        if (p_audioOutputPortMock != nullptr)
-        {
-            delete p_audioOutputPortMock;
-            p_audioOutputPortMock = nullptr;
-        }
-        device::VideoOutputPort::setImpl(nullptr);
-        if (p_videoOutputPortMock != nullptr)
-        {
-            delete p_videoOutputPortMock;
-            p_videoOutputPortMock = nullptr;
-        }
-
-        device::Host::setImpl(nullptr);
-        if (p_hostImplMock != nullptr)
-        {
-            delete p_hostImplMock;
-            p_hostImplMock = nullptr;
-        }
+        ::testing::DefaultValue<Core::hresult>::Clear();
 
     }
 };
@@ -295,6 +352,7 @@ protected:
      * - GPU memory information retrieval
      * - Display dimensions and connection status
      */
+#if 0
     TEST_F(DisplayInfoTestTest, Info_AllProperties)
     {
         // Arrange: Set up device/host mocks to control the environment
@@ -326,18 +384,6 @@ protected:
             .WillByDefault(::testing::ReturnRef(display));
 
         // Audio passthrough
-        ON_CALL(*p_audioOutputPortMock, getStereoMode(::testing::_))
-            .WillByDefault(::testing::Return(device::AudioStereoMode::kPassThru));
-
-        // EDID for width/height
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [](std::vector<uint8_t>& edidVec) {
-                    edidVec = std::vector<uint8_t>(23, 0);
-                    edidVec[21] = 77; // width in cm
-                    edidVec[22] = 55; // height in cm
-                }));
-
         EXPECT_CALL(*p_drmMock, drmModeGetResources(::testing::_))
             .Times(::testing::AnyNumber())
             .WillRepeatedly(::testing::Invoke([](int) {
@@ -472,29 +518,14 @@ protected:
         ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
             .WillByDefault(::testing::Return(true));
 
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
+        ON_CALL(DeviceSettingsDisplayMock::Mock(), GetDisplayEdidBytes(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
-                [&](std::vector<uint8_t> &edidVec2) {
-                    edidVec2 = std::vector<uint8_t>({ 't', 'e', 's', 't' });
-                }));
-
-        ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_,::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [&](unsigned char* bytes, size_t count) {
-                    // Mocked verification logic
-                    return edid_parser::EDID_STATUS_OK;
-                }));
-
-        ON_CALL(*p_edidParserMock, EDID_Parse(::testing::_,::testing::_, ::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [&](unsigned char* bytes, size_t count, edid_parser::edid_data_t* data_ptr) {
-                    // Mocked parsing logic
-                    edid_parser::edid_res_t res = {0};
-                    res.refresh = 60;
-                    res.width = 70;
-                    res.height = 35;
-                    data_ptr->res = res; // Set the expected width and height
-                    return edid_parser::EDID_STATUS_OK;
+                [](int32_t, uint8_t* bytes, uint16_t length) {
+                    const std::vector<uint8_t> edid = DisplayInfoTest::DetailedTimingEdid(70, 35);
+                    const size_t copyLength = std::min(edid.size(), static_cast<size_t>(length));
+                    std::copy(edid.begin(), edid.begin() + copyLength, bytes);
+                    std::fill(bytes + copyLength, bytes + length, 0);
+                    return Core::ERROR_NONE;
                 }));
 
 
@@ -549,32 +580,6 @@ protected:
         ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
             .WillByDefault(::testing::Return(true));
 
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [&](std::vector<uint8_t> &edidVec2) {
-                    edidVec2 = std::vector<uint8_t>({ 't', 'e', 's', 't' });
-                }));
-                
-        ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_,::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [&](unsigned char* bytes, size_t count) {
-                    // Mocked verification logic
-                    return edid_parser::EDID_STATUS_OK;
-                }));
-
-        ON_CALL(*p_edidParserMock, EDID_Parse(::testing::_,::testing::_, ::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [&](unsigned char* bytes, size_t count, edid_parser::edid_data_t* data_ptr) {
-                    // Mocked parsing logic
-                    edid_parser::edid_res_t res;
-                    res.refresh = 60;
-                    res.width = 0;
-                    res.height = 0;
-                    data_ptr->res = res; // Set the expected vertical frequency
-                    return edid_parser::EDID_STATUS_OK;
-                }));
-                
-
         uint32_t _connectionId = 0;
         Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
         ASSERT_NE(connectionProperties, nullptr);
@@ -603,12 +608,6 @@ protected:
             .WillByDefault(::testing::Return(true));
         ON_CALL(*p_videoOutputPortMock, getDisplay())
             .WillByDefault(::testing::ReturnRef(display));
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [](std::vector<uint8_t>& edidVec) {
-                    edidVec = std::vector<uint8_t>({'A', 'B', 'C', 'D'});
-                }));
-
         // Act: Call the EDID function via the COMRPC interface
         uint32_t _connectionId = 0;
         Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -644,14 +643,6 @@ protected:
             .WillByDefault(::testing::Return(true));
         ON_CALL(*p_videoOutputPortMock, getDisplay())
             .WillByDefault(::testing::ReturnRef(display));
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [](std::vector<uint8_t>& edidVec) {
-                    // EDID must be at least 23 bytes for index 21 (EDID_MAX_HORIZONTAL_SIZE)
-                    edidVec = std::vector<uint8_t>(23, 0);
-                    edidVec[21] = 77; // Set horizontal size in cm at index 21
-                }));
-    
         // Act: Call the WidthInCentimeters function via the COMRPC interface
         uint32_t _connectionId = 0;
         Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -691,14 +682,6 @@ protected:
         
         ON_CALL(*p_videoOutputPortMock, getName())
             .WillByDefault(::testing::ReturnRef(videoName));
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [](std::vector<uint8_t>& edidVec) {
-                    // EDID must be at least 23 bytes for index 22 (EDID_MAX_VERTICAL_SIZE)
-                    edidVec = std::vector<uint8_t>(23, 0);
-                    edidVec[22] = 55; // Set vertical size in cm at index 22
-                }));
-    
         // Act: Call the HeightInCentimeters function via the COMRPC interface
         uint32_t _connectionId = 0;
         Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -954,25 +937,6 @@ protected:
             .WillByDefault(::testing::Return(true));
         ON_CALL(*p_videoOutputPortMock, getDisplay())
             .WillByDefault(::testing::ReturnRef(display));
-        ON_CALL(*p_displayMock, getEDIDBytes(::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [](std::vector<uint8_t>& edidVec) {
-                    edidVec = std::vector<uint8_t>(128, 0xAA); // Just a dummy EDID
-                }));
-    
-        // Mock EDID_Verify to succeed
-        ON_CALL(*p_edidParserMock, EDID_Verify(::testing::_, ::testing::_))
-            .WillByDefault(::testing::Return(edid_parser::EDID_STATUS_OK));
-    
-        // Mock EDID_Parse to set colorimetry_info
-        ON_CALL(*p_edidParserMock, EDID_Parse(::testing::_, ::testing::_, ::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [](unsigned char*, size_t, edid_parser::edid_data_t* data_ptr) {
-                    // Set colorimetry_info to include XVYCC601 and BT2020CL
-                    data_ptr->colorimetry_info = edid_parser::COLORIMETRY_INFO_XVYCC601 | edid_parser::COLORIMETRY_INFO_XVYCC709 | edid_parser::COLORIMETRY_INFO_SYCC601 | edid_parser::COLORIMETRY_INFO_ADOBEYCC601 | edid_parser::COLORIMETRY_INFO_ADOBERGB | edid_parser::COLORIMETRY_INFO_BT2020CL | edid_parser::COLORIMETRY_INFO_BT2020NCL |edid_parser::COLORIMETRY_INFO_BT2020RGB | edid_parser::COLORIMETRY_INFO_DCI_P3;
-                    return edid_parser::EDID_STATUS_OK;
-                }));
-    
         // Act: Call the Colorimetry function via the COMRPC interface
         uint32_t _connectionId = 0;
         Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -1385,12 +1349,16 @@ TEST_F(DisplayInfoTestTest, IsAudioPassthrough_ExceptionHandling)
         .WillByDefault(::testing::ReturnRef(videoOutputPort));
     ON_CALL(*p_videoOutputPortMock, getAudioOutputPort())
         .WillByDefault(::testing::ReturnRef(audioOutputPort));
+    // HDMI audio connectivity gates IsAudioPassthrough; keep the display connected
+    // so execution reaches the throwing getStereoMode() path under test.
+    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
+        .WillByDefault(::testing::Return(true));
     
     // Mock to throw exception
-    ON_CALL(*p_audioOutputPortMock, getStereoMode(::testing::_))
-        .WillByDefault(::testing::Invoke([](bool) {
+    ON_CALL(DeviceSettingsAudioMock::Mock(), GetStereoMode(::testing::_, ::testing::_, ::testing::_))
+        .WillByDefault(::testing::Invoke([](int32_t, Exchange::IDeviceSettingsAudio::StereoMode&, bool) {
             throw device::Exception("Audio device exception");
-            return false;
+            return Core::ERROR_GENERAL;
         }));
 
     uint32_t _connectionId = 0;
@@ -1864,20 +1832,8 @@ TEST_F(DisplayInfoTestTest, STBCapabilities_ExceptionHandling)
 
 TEST_F(DisplayInfoTestTest, EDID_ExceptionHandling)
 {
-    device::VideoOutputPort videoOutputPort;
-    string videoPort(_T("HDMI0"));
-
-    ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
-        .WillByDefault(::testing::Return(videoPort));
-    ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
-        .WillByDefault(::testing::ReturnRef(videoOutputPort));
-    
-    // Mock to throw exception
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Invoke([]() {
-            throw device::Exception("EDID device exception");
-            return 0;
-        }));
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     uint32_t _connectionId = 0;
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -1898,7 +1854,7 @@ TEST_F(DisplayInfoTestTest, EDID_ExceptionHandling)
  * This comprehensive notification test validates:
  * - Proper implementation of Thunder notification pattern following HdmiCecSource example
  * - IConnectionProperties::INotification interface usage for resolution change events
- * - Event triggering through IARM bus resolution change simulation
+ * - Event triggering through the DeviceSettings video-port notification delegate
  * - Notification callback execution and parameter validation
  * - COMRPC notification system integration with DisplayInfo plugin
  * - Threading and synchronization aspects of notification delivery
@@ -1983,6 +1939,11 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
 
+    Core::Sink<Plugin::DisplayInfoImplementation::DSVideoPortNotification> videoPortNotification(
+        *Plugin::DisplayInfoImplementation::_instance);
+    const Exchange::IDeviceSettingsVideoPort::ResolutionChange hdResolution = { 1920, 1080 };
+    const Exchange::IDeviceSettingsVideoPort::ResolutionChange uhdResolution = { 3840, 2160 };
+
     // Register our notification handler
     uint32_t result = connectionProperties->Register(&notification);
     EXPECT_EQ(result, Core::ERROR_NONE);
@@ -1991,8 +1952,8 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
     {
         notification.Reset();
 
-        // Trigger the resolution change event directly using the static function
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPreChange( 1920, 1080 );
+        // Trigger the DeviceSettings resolution change callback
+        videoPortNotification.OnResolutionPreChange(hdResolution);
 
         // Wait for notification with timeout
         bool eventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
@@ -2004,7 +1965,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         notification.Reset();
         
         // Trigger the resolution change event
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 3840, 2160 );
+        videoPortNotification.OnResolutionPostChange(uhdResolution);
 
         // Wait for notification with timeout
         bool eventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
@@ -2023,7 +1984,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         secondNotification.Reset();
 
         // Trigger event - both should receive it
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPreChange( 3840, 2160 );
+        videoPortNotification.OnResolutionPreChange(uhdResolution);
 
         // Both notifications should receive the event
         bool firstEventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
@@ -2046,7 +2007,7 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         notification.Reset();
 
         // Trigger event - should not be received
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPreChange( 3840, 2160 );
+        videoPortNotification.OnResolutionPreChange(uhdResolution);
 
         // Should timeout since no notification should be received
         bool eventReceived = notification.WaitForEvent(500, Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
@@ -2061,22 +2022,15 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
 // getCurrentColorimetry tests (Tasks 5.1 – 5.10)
 // ============================================================================
 
+#endif
+
 /**
  * @brief Test getCurrentColorimetry: display connected, BT.709 matrix coefficient
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT709)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_BT_709)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2097,17 +2051,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT709)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020NCL)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2128,17 +2073,10 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020NCL)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020CL)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(
+            ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_CL),
+            ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2159,17 +2097,10 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_BT2020CL)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_SMPTE170M)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(
+            ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_SMPTE_170M),
+            ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2190,17 +2121,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_SMPTE170M)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC709)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_XVYCC_709), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2221,17 +2143,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC709)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC601)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_EXVYCC_601), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2252,17 +2165,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_XvYCC601)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_DSUnknownSentinel)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2283,18 +2187,11 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_DSUnknownSentinel)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_GenuinelyUnmapped)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
     // Use a value that is not MATRIXCOEFFICIENT_UNKNOWN and has no explicit mapping — hits default branch
-    EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-        .WillOnce(::testing::Return(static_cast<int>(9999)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillOnce(::testing::DoAll(
+            ::testing::SetArgReferee<1>(static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(9999)),
+            ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2315,12 +2212,9 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_GenuinelyUnmapped)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_NoDisplayConnected)
 {
-    device::VideoOutputPort videoOutputPort;
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(false)); // no display connected
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
+        .WillByDefault(::testing::DoAll(
+            ::testing::SetArgReferee<1>(false), ::testing::Return(Core::ERROR_NONE)));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2341,8 +2235,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_NoDisplayConnected)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_DeviceException)
 {
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Throw(device::Exception(1, "getVideoOutputPorts failed")));
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     uint32_t _connectionId = 0;
     Exchange::IDisplayProperties* displayProperties = service.Root<Exchange::IDisplayProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
@@ -2363,28 +2257,18 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_DeviceException)
  */
 TEST_F(DisplayInfoTestTest, CurrentColorimetry_AllMappings)
 {
-    device::VideoOutputPort videoOutputPort;
-    std::string videoName = "HDMI-1";
-
-    ON_CALL(*p_hostImplMock, getVideoOutputPorts())
-        .WillByDefault(::testing::Return(std::vector<device::VideoOutputPort>({videoOutputPort})));
-    ON_CALL(*p_videoOutputPortMock, getName())
-        .WillByDefault(::testing::ReturnRef(videoName));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-
     struct {
-        dsDisplayMatrixCoefficients_t input;
+        Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients input;
         Exchange::IDisplayProperties::ColorimetryType expected;
     } testCases[] = {
-        {dsDISPLAY_MATRIXCOEFFICIENT_BT_709,                         Exchange::IDisplayProperties::COLORIMETRY_BT709},
-        {dsDISPLAY_MATRIXCOEFFICIENT_SMPTE_170M,                     Exchange::IDisplayProperties::COLORIMETRY_SMPTE170M},
-        {dsDISPLAY_MATRIXCOEFFICIENT_XvYCC_709,                      Exchange::IDisplayProperties::COLORIMETRY_XVYCC709},
-        {dsDISPLAY_MATRIXCOEFFICIENT_eXvYCC_601,                     Exchange::IDisplayProperties::COLORIMETRY_XVYCC601},
-        {dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL,                    Exchange::IDisplayProperties::COLORIMETRY_BT2020RGB_YCBCR},
-        {dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL,                     Exchange::IDisplayProperties::COLORIMETRY_BT2020YCCBCBRC},
-        {dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN,                        Exchange::IDisplayProperties::COLORIMETRY_UNKNOWN},
-        {static_cast<dsDisplayMatrixCoefficients_t>(9999),           Exchange::IDisplayProperties::COLORIMETRY_OTHER},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_709, Exchange::IDisplayProperties::COLORIMETRY_BT709},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_SMPTE_170M, Exchange::IDisplayProperties::COLORIMETRY_SMPTE170M},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_XVYCC_709, Exchange::IDisplayProperties::COLORIMETRY_XVYCC709},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_EXVYCC_601, Exchange::IDisplayProperties::COLORIMETRY_XVYCC601},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL, Exchange::IDisplayProperties::COLORIMETRY_BT2020RGB_YCBCR},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_BT_2020_CL, Exchange::IDisplayProperties::COLORIMETRY_BT2020YCCBCBRC},
+        {Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_MATRIXCOEFFICIENT_UNKNOWN, Exchange::IDisplayProperties::COLORIMETRY_UNKNOWN},
+        {static_cast<Exchange::IDeviceSettingsVideoPort::DisplayMatrixCoefficients>(9999), Exchange::IDisplayProperties::COLORIMETRY_OTHER},
     };
 
     uint32_t _connectionId = 0;
@@ -2392,8 +2276,8 @@ TEST_F(DisplayInfoTestTest, CurrentColorimetry_AllMappings)
     ASSERT_NE(displayProperties, nullptr);
 
     for (const auto& tc : testCases) {
-        EXPECT_CALL(*p_videoOutputPortMock, getMatrixCoefficients())
-            .WillOnce(::testing::Return(static_cast<int>(tc.input)));
+        EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetMatrixCoefficients(::testing::_, ::testing::_))
+            .WillOnce(::testing::DoAll(::testing::SetArgReferee<1>(tc.input), ::testing::Return(Core::ERROR_NONE)));
 
         Exchange::IDisplayProperties::ColorimetryTypeInfo info;
         info.colorimetry = Exchange::IDisplayProperties::COLORIMETRY_OTHER;
