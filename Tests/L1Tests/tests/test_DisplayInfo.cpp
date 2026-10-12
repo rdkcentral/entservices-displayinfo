@@ -510,10 +510,10 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
     Core::Sink<Plugin::DisplayInfoImplementation::DSVideoPortNotification> videoPortNotification(
         *Plugin::DisplayInfoImplementation::_instance);
     videoPortNotification.OnResolutionPreChange({1920, 1080});
-    EXPECT_TRUE(notification->WaitFor(
+    EXPECT_TRUE(notification.WaitFor(
         Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE));
     videoPortNotification.OnResolutionPostChange({3840, 2160});
-    EXPECT_TRUE(notification->WaitFor(
+    EXPECT_TRUE(notification.WaitFor(
         Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
 
     EXPECT_EQ(connectionProperties->Unregister(&notification), Core::ERROR_NONE);
