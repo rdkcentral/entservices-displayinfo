@@ -410,10 +410,11 @@ TEST_F(DisplayInfoTestTest, DisplayProperties)
 
 TEST_F(DisplayInfoTestTest, HDRAndHDCP)
 {
-    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetTVHDRCapabilities(::testing::_, ::testing::_))
-        .WillByDefault(::testing::DoAll(
-            ::testing::SetArgReferee<1>(static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10)),
-            ::testing::Return(Core::ERROR_NONE)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetTVHDRCapabilities(::testing::_, ::testing::_))
+        .WillOnce(::testing::Invoke([](int32_t, int32_t& capabilities) {
+            capabilities = static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10);
+            return Core::ERROR_NONE;
+        }));
     ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetHDMIPreference(::testing::_, ::testing::_))
         .WillByDefault(::testing::DoAll(
             ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_2X),
