@@ -435,7 +435,10 @@ TEST_F(DisplayInfoTestTest, HDRAndHDCP)
     Exchange::IHDRProperties::IHDRIterator* iterator = nullptr;
     EXPECT_EQ(hdrProperties->TVCapabilities(iterator), Core::ERROR_NONE);
     ASSERT_NE(iterator, nullptr);
+    Exchange::IHDRProperties::HDRType currentHDR = Exchange::IHDRProperties::HDR_OFF;
+    ASSERT_TRUE(iterator->Next(currentHDR));
     ASSERT_TRUE(iterator->IsValid());
+    EXPECT_EQ(currentHDR, Exchange::IHDRProperties::HDR_10);
     EXPECT_EQ(iterator->Current(), Exchange::IHDRProperties::HDR_10);
     iterator->Release();
 
