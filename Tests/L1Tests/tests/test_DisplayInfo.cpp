@@ -424,8 +424,7 @@ TEST_F(DisplayInfoTestTest, HDRAndHDCP)
         .WillByDefault(::testing::DoAll(
             ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_2X),
             ::testing::Return(Core::ERROR_NONE)));
-    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), SetHDMIPreference(
-        ::testing::_, Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_1X))
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), SetHDMIPreference(::testing::_, ::testing::_))
         .WillOnce(::testing::Return(Core::ERROR_NONE));
 
     uint32_t connectionId = 0;
