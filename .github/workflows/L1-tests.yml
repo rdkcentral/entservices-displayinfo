@@ -123,7 +123,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: 2.0.0
+          ref: 2.1.0
 
       - name: Checkout entservices-displayinfo
         if: ${{ inputs.caller_source == 'local' }}
@@ -185,8 +185,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-apis
           path: entservices-apis
-          ref: feature/RDKEMW-22037_2
-          run: rm -rf $GITHUB_WORKSPACE/entservices-apis/jsonrpc/DTV.json
+          ref: develop
 
       - name: Apply patches entservices-apis
         run: |
@@ -215,7 +214,6 @@ jobs:
           mkdir -p
           headers
           headers/audiocapturemgr
-          headers/rdk/ds
           headers/rdk/iarmbus
           headers/rdk/iarmmgrs-hal
           headers/rdk/halif/
@@ -229,30 +227,6 @@ jobs:
           touch
           audiocapturemgr/audiocapturemgr_iarm.h
           ccec/drivers/CecIARMBusMgr.h
-          rdk/ds/audioOutputPort.hpp
-          rdk/ds/compositeIn.hpp
-          rdk/ds/dsDisplay.h
-          rdk/ds/dsError.h
-          rdk/ds/dsMgr.h
-          rdk/ds/dsTypes.h
-          rdk/ds/dsUtl.h
-          rdk/ds/exception.hpp
-          rdk/ds/hdmiIn.hpp
-          rdk/ds/host.hpp
-          rdk/ds/list.hpp
-          rdk/ds/manager.hpp
-          rdk/ds/sleepMode.hpp
-          rdk/ds/videoDevice.hpp
-          rdk/ds/videoOutputPort.hpp
-          rdk/ds/videoOutputPortConfig.hpp
-          rdk/ds/videoOutputPortType.hpp
-          rdk/ds/videoResolution.hpp
-          rdk/ds/frontPanelIndicator.hpp
-          rdk/ds/frontPanelConfig.hpp
-          rdk/ds/frontPanelTextDisplay.hpp
-          rdk/ds/audioOutputPortType.hpp
-          rdk/ds/audioOutputPortConfig.hpp
-          rdk/ds/pixelResolution.hpp
           rdk/iarmbus/libIARM.h
           rdk/iarmbus/libIBus.h
           rdk/iarmbus/libIBusDaemon.h
@@ -262,7 +236,6 @@ jobs:
           rdk/iarmmgrs-hal/sysMgr.h
           network/wifiSrvMgrIarmIf.h
           network/netsrvmgrIarm.h
-          edid-parser.hpp
           libudev.h
           rfcapi.h
           rbus.h
@@ -272,7 +245,6 @@ jobs:
           telemetry_busmessage_sender.h
           maintenanceMGR.h
           pkg.h
-          edid-parser.hpp
           secure_wrapper.h
           wpa_ctrl.h
           proc/readproc.h
@@ -367,8 +339,6 @@ jobs:
           -I$GITHUB_WORKSPACE/entservices-helpers/helpers
           -I$GITHUB_WORKSPACE/install/usr/include
           -I ./usr/include/libdrm
-          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
-          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings/VideoOutputPortMock.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/RBus.h
@@ -393,9 +363,7 @@ jobs:
           -DHAS_API_SYSTEM
           -DHAS_API_POWERSTATE
           -DHAS_RBUS
-          -D_DRM_MODE_H
           -DENABLE_DEVICE_MANUFACTURER_INFO"
-          -D_DRM_MODE_H=ON
           &&
           cmake --build build/mocks -j8
           &&
@@ -430,7 +398,6 @@ jobs:
           -I$GITHUB_WORKSPACE/install/usr/include/WPEFramework
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/mocks
           -I ./usr/include/libdrm
-          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/RBus.h
@@ -456,7 +423,6 @@ jobs:
           -DUSE_DRM_SCREENCAPTURE
           -DHAS_API_SYSTEM
           -DHAS_API_POWERSTATE
-          -D_DRM_MODE_H=ON
           -DHAS_RBUS
           -DENABLE_DEVICE_MANUFACTURER_INFO"
           -DCOMCAST_CONFIG=OFF
@@ -508,7 +474,6 @@ jobs:
           -I$GITHUB_WORKSPACE/install/usr/include
           -I$GITHUB_WORKSPACE/install/usr/include/WPEFramework
           -I ./usr/include/libdrm
-          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/RBus.h
@@ -534,7 +499,6 @@ jobs:
           -DUSE_DRM_SCREENCAPTURE
           -DHAS_API_SYSTEM
           -DHAS_API_POWERSTATE
-          -D_DRM_MODE_H=ON
           -DHAS_RBUS
           -DENABLE_DEVICE_MANUFACTURER_INFO"
           -DCOMCAST_CONFIG=OFF
