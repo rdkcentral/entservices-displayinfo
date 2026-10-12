@@ -305,6 +305,10 @@ protected:
         }
 
         DeviceSettingsMock::Delete();
+        DeviceSettingsAudioMock::Delete();
+        DeviceSettingsVideoPortMock::Delete();
+        DeviceSettingsVideoDeviceMock::Delete();
+        DeviceSettingsDisplayMock::Delete();
         
 
         if (p_serviceMock != nullptr)
