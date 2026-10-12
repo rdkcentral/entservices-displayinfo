@@ -298,13 +298,13 @@ protected:
         plugin.Release();
         displayInfoImplementation.Release();
 
-        DeviceSettingsMock::Delete();
-
         if (workerPoolAssigned) {
             workerPool->Stop();
             Core::IWorkerPool::Assign(nullptr);
             workerPoolAssigned = false;
         }
+
+        DeviceSettingsMock::Delete();
         
 
         if (p_serviceMock != nullptr)
