@@ -450,7 +450,8 @@ TEST_F(DisplayInfoTestTest, HDRAndHDCP)
         service.Root<Exchange::IConnectionProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
     Exchange::IConnectionProperties::HDCPProtectionType protection;
-    EXPECT_EQ(connectionProperties->HDCPProtection(protection), Core::ERROR_NONE);
+    const Exchange::IConnectionProperties* connectionPropertiesConst = connectionProperties;
+    EXPECT_EQ(connectionPropertiesConst->HDCPProtection(protection), Core::ERROR_NONE);
     EXPECT_EQ(protection, Exchange::IConnectionProperties::HDCP_2X);
     EXPECT_EQ(connectionProperties->HDCPProtection(Exchange::IConnectionProperties::HDCP_1X), Core::ERROR_NONE);
     connectionProperties->Release();
