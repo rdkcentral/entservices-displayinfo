@@ -295,12 +295,9 @@ protected:
         dispatcher->Deactivate();
         dispatcher->Release();
 
+        plugin.Release();
         displayInfoImplementation.Release();
 
-        DeviceSettingsAudioMock::Delete();
-        DeviceSettingsDisplayMock::Delete();
-        DeviceSettingsVideoDeviceMock::Delete();
-        DeviceSettingsVideoPortMock::Delete();
         DeviceSettingsMock::Delete();
 
         if (workerPoolAssigned) {
