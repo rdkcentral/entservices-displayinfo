@@ -341,6 +341,185 @@ protected:
     }
 };
 
+TEST_F(DisplayInfoTestTest, Info_AllProperties)
+{
+    uint32_t connectionId = 0;
+    Exchange::IConnectionProperties* connectionProperties =
+        service.Root<Exchange::IConnectionProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(connectionProperties, nullptr);
+
+    bool connected = false;
+    bool audioPassthrough = false;
+    EXPECT_EQ(connectionProperties->Connected(connected), Core::ERROR_NONE);
+    EXPECT_TRUE(connected);
+    EXPECT_EQ(connectionProperties->IsAudioPassthrough(audioPassthrough), Core::ERROR_NONE);
+    EXPECT_TRUE(audioPassthrough);
+
+    connectionProperties->Release();
+}
+
+TEST_F(DisplayInfoTestTest, WidthAndHeight)
+{
+    ON_CALL(DeviceSettingsDisplayMock::Mock(), GetDisplayEdidBytes(::testing::_, ::testing::_, ::testing::_))
+        .WillByDefault(::testing::Invoke([](int32_t, uint8_t* bytes, uint16_t length) {
+            const std::vector<uint8_t> edid = DisplayInfoTest::DetailedTimingEdid(1920, 1080);
+            const size_t count = std::min(edid.size(), static_cast<size_t>(length));
+            std::copy(edid.begin(), edid.begin() + count, bytes);
+            std::fill(bytes + count, bytes + length, 0);
+            return Core::ERROR_NONE;
+        }));
+
+    uint32_t connectionId = 0;
+    Exchange::IConnectionProperties* connectionProperties =
+        service.Root<Exchange::IConnectionProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(connectionProperties, nullptr);
+
+    uint32_t width = 0;
+    uint32_t height = 0;
+    EXPECT_EQ(connectionProperties->Width(width), Core::ERROR_NONE);
+    EXPECT_EQ(connectionProperties->Height(height), Core::ERROR_NONE);
+    EXPECT_EQ(width, 1920u);
+    EXPECT_EQ(height, 1080u);
+
+    connectionProperties->Release();
+}
+
+TEST_F(DisplayInfoTestTest, DisplayProperties)
+{
+    uint32_t connectionId = 0;
+    Exchange::IDisplayProperties* displayProperties =
+        service.Root<Exchange::IDisplayProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(displayProperties, nullptr);
+
+    Exchange::IDisplayProperties::ColourSpaceType colourSpace;
+    Exchange::IDisplayProperties::FrameRateType frameRate;
+    Exchange::IDisplayProperties::ColourDepthType colourDepth;
+    Exchange::IDisplayProperties::QuantizationRangeType quantizationRange;
+    EXPECT_EQ(displayProperties->ColorSpace(colourSpace), Core::ERROR_NONE);
+    EXPECT_EQ(colourSpace, Exchange::IDisplayProperties::FORMAT_RGB_444);
+    EXPECT_EQ(displayProperties->FrameRate(frameRate), Core::ERROR_NONE);
+    EXPECT_EQ(frameRate, Exchange::IDisplayProperties::FRAMERATE_60);
+    EXPECT_EQ(displayProperties->ColourDepth(colourDepth), Core::ERROR_NONE);
+    EXPECT_EQ(colourDepth, Exchange::IDisplayProperties::COLORDEPTH_8_BIT);
+    EXPECT_EQ(displayProperties->QuantizationRange(quantizationRange), Core::ERROR_NONE);
+    EXPECT_EQ(quantizationRange, Exchange::IDisplayProperties::QUANTIZATIONRANGE_FULL);
+
+    displayProperties->Release();
+}
+
+TEST_F(DisplayInfoTestTest, HDRAndHDCP)
+{
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetTVHDRCapabilities(::testing::_, ::testing::_))
+        .WillByDefault(::testing::DoAll(
+            ::testing::SetArgReferee<1>(static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10)),
+            ::testing::Return(Core::ERROR_NONE)));
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetHDMIPreference(::testing::_, ::testing::_))
+        .WillByDefault(::testing::DoAll(
+            ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_2X),
+            ::testing::Return(Core::ERROR_NONE)));
+    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), SetHDMIPreference(
+        ::testing::_, Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_1X))
+        .WillOnce(::testing::Return(Core::ERROR_NONE));
+
+    uint32_t connectionId = 0;
+    Exchange::IHDRProperties* hdrProperties =
+        service.Root<Exchange::IHDRProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(hdrProperties, nullptr);
+    Exchange::IHDRProperties::IHDRIterator* iterator = nullptr;
+    EXPECT_EQ(hdrProperties->TVCapabilities(iterator), Core::ERROR_NONE);
+    ASSERT_NE(iterator, nullptr);
+    ASSERT_TRUE(iterator->IsValid());
+    EXPECT_EQ(iterator->Current(), Exchange::IHDRProperties::HDR_10);
+    iterator->Release();
+
+    Exchange::IHDRProperties::HDRType hdrSetting = Exchange::IHDRProperties::HDR_OFF;
+    EXPECT_EQ(hdrProperties->HDRSetting(hdrSetting), Core::ERROR_NONE);
+    EXPECT_EQ(hdrSetting, Exchange::IHDRProperties::HDR_OFF);
+    hdrProperties->Release();
+
+    Exchange::IConnectionProperties* connectionProperties =
+        service.Root<Exchange::IConnectionProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(connectionProperties, nullptr);
+    Exchange::IConnectionProperties::HDCPProtectionType protection;
+    EXPECT_EQ(connectionProperties->HDCPProtection(protection), Core::ERROR_NONE);
+    EXPECT_EQ(protection, Exchange::IConnectionProperties::HDCP_2X);
+    EXPECT_EQ(connectionProperties->HDCPProtection(Exchange::IConnectionProperties::HDCP_1X), Core::ERROR_NONE);
+    connectionProperties->Release();
+}
+
+TEST_F(DisplayInfoTestTest, ErrorPaths)
+{
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetColorSpace(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
+
+    uint32_t connectionId = 0;
+    Exchange::IDisplayProperties* displayProperties =
+        service.Root<Exchange::IDisplayProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(displayProperties, nullptr);
+    Exchange::IDisplayProperties::ColourSpaceType colourSpace = Exchange::IDisplayProperties::FORMAT_RGB_444;
+    EXPECT_EQ(displayProperties->ColorSpace(colourSpace), Core::ERROR_NONE);
+    EXPECT_EQ(colourSpace, Exchange::IDisplayProperties::FORMAT_UNKNOWN);
+    displayProperties->Release();
+
+    Exchange::IConnectionProperties* connectionProperties =
+        service.Root<Exchange::IConnectionProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(connectionProperties, nullptr);
+    uint16_t length = 4;
+    uint8_t data[4] = {};
+    EXPECT_EQ(connectionProperties->EDID(length, data), Core::ERROR_GENERAL);
+    connectionProperties->Release();
+}
+
+TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
+{
+    class Notification : public Exchange::IConnectionProperties::INotification {
+    public:
+        void Updated(const Exchange::IConnectionProperties::INotification::Source source) override
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            lastSource = source;
+            condition.notify_one();
+        }
+        bool WaitFor(const Exchange::IConnectionProperties::INotification::Source source)
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            return condition.wait_for(lock, std::chrono::seconds(1), [this, source]() {
+                return lastSource == source;
+            });
+        }
+    private:
+        std::mutex mutex;
+        std::condition_variable condition;
+    public:
+        Exchange::IConnectionProperties::INotification::Source lastSource =
+            Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE;
+        BEGIN_INTERFACE_MAP(Notification)
+        INTERFACE_ENTRY(Exchange::IConnectionProperties::INotification)
+        END_INTERFACE_MAP
+    };
+    Core::Sink<Notification> notification;
+
+    uint32_t connectionId = 0;
+    Exchange::IConnectionProperties* connectionProperties =
+        service.Root<Exchange::IConnectionProperties>(connectionId, 2000, _T("DisplayInfoImplementation"));
+    ASSERT_NE(connectionProperties, nullptr);
+    ASSERT_EQ(connectionProperties->Register(&notification), Core::ERROR_NONE);
+
+    Core::Sink<Plugin::DisplayInfoImplementation::DSVideoPortNotification> videoPortNotification(
+        *Plugin::DisplayInfoImplementation::_instance);
+    videoPortNotification.OnResolutionPreChange({1920, 1080});
+    EXPECT_TRUE(notification->WaitFor(
+        Exchange::IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE));
+    videoPortNotification.OnResolutionPostChange({3840, 2160});
+    EXPECT_TRUE(notification->WaitFor(
+        Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
+
+    EXPECT_EQ(connectionProperties->Unregister(&notification), Core::ERROR_NONE);
+    connectionProperties->Release();
+}
+
     /**
      * @brief Test the Info endpoint via HTTP GET request
      * 
