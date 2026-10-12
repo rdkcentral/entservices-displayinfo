@@ -297,6 +297,10 @@ protected:
 
         displayInfoImplementation.Release();
 
+        DeviceSettingsAudioMock::Delete();
+        DeviceSettingsDisplayMock::Delete();
+        DeviceSettingsVideoDeviceMock::Delete();
+        DeviceSettingsVideoPortMock::Delete();
         DeviceSettingsMock::Delete();
 
         if (workerPoolAssigned) {
