@@ -296,6 +296,7 @@ protected:
         dispatcher->Release();
 
         plugin.Release();
+        displayInfoImplementation->DSHelper::Close();
         displayInfoImplementation.Release();
 
         if (workerPoolAssigned) {
