@@ -167,6 +167,12 @@ protected:
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(0), ::testing::Return(Core::ERROR_NONE)));
         ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortOutputHDR(::testing::_, ::testing::_))
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(false), ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetHDMIPreference(::testing::_, ::testing::_))
+            .WillByDefault(::testing::DoAll(
+                ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_2X),
+                ::testing::Return(Core::ERROR_NONE)));
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), SetHDMIPreference(::testing::_, ::testing::_))
+            .WillByDefault(::testing::Return(Core::ERROR_NONE));
         ON_CALL(DeviceSettingsDisplayMock::Mock(), GetDisplay(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [this](Exchange::IDeviceSettingsDisplay::DisplayPortType, int32_t, int32_t& handle) {
@@ -420,12 +426,6 @@ TEST_F(DisplayInfoTestTest, HDRAndHDCP)
             capabilities = static_cast<int32_t>(Exchange::IDeviceSettingsVideoPort::DS_HDRSTANDARD_HDR10);
             return Core::ERROR_NONE;
         }));
-    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), GetHDMIPreference(::testing::_, ::testing::_))
-        .WillRepeatedly(::testing::DoAll(
-            ::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_HDCP_VERSION_2X),
-            ::testing::Return(Core::ERROR_NONE)));
-    EXPECT_CALL(DeviceSettingsVideoPortMock::Mock(), SetHDMIPreference(::testing::_, ::testing::_))
-        .WillRepeatedly(::testing::Return(Core::ERROR_NONE));
 
     uint32_t connectionId = 0;
     Exchange::IHDRProperties* hdrProperties =
