@@ -44,6 +44,7 @@ subsystem is ready.
 | REQ-F-09 | HDCPProtection MUST support both getter and setter semantics on platforms that allow preference configuration (DeviceSettings, BCM/RPI). |
 | REQ-F-10 | The plugin MUST register with the `Platform` precondition and MUST NOT activate before that precondition is satisfied. |
 | REQ-F-11 | The DeviceSettings backend `Colorimetry()` MUST return an empty `IColorimetryIterator` and `ERROR_NONE` for all failure paths (display not connected, EDID read/verify failure, `device::Exception`). It MUST NOT return `ERROR_GENERAL` to callers. |
+| REQ-F-12 | The DeviceSettings backend MUST cache the active frame rate asynchronously at construction time (best-effort, with retry), and MUST emit `Updated(FRAMERATE_CHANGE)` whenever a subsequent resolution-change callback observes a frame rate different from the cached value. |
 
 ### Non-Functional
 
@@ -75,6 +76,23 @@ subsystem is ready.
 #### Scenario: Implementation uses vector for EDID buffer
 - **WHEN** `Colorimetry()` reads EDID bytes from the display
 - **THEN** the implementation SHALL store EDID bytes in a `std::vector<unsigned char>` (not a raw `new unsigned char[]`)
+
+### DeviceSettings Backend Frame Rate Change Scenarios
+
+#### Scenario: Frame rate cached asynchronously at construction — DeviceSettings backend
+- **WHEN** `DisplayInfoImplementation` is constructed
+- **THEN** it SHALL spawn a joinable background thread (`CacheInitialFrameRateAsync`) that queries `FrameRate()` and caches the result
+- **THEN** on failure it SHALL retry once after a fixed delay before giving up (best-effort; does not block `Initialize()`)
+- **THEN** if the object is destructed before the thread finishes, the destructor SHALL signal shutdown and join the thread before any other teardown proceeds, so the thread can never touch a destroyed object
+
+#### Scenario: Frame rate change detected on resolution-change callback — DeviceSettings backend
+- **WHEN** `OnResolutionPostChange` fires and the queried frame rate differs from the cached value
+- **THEN** the backend SHALL emit `Updated(FRAMERATE_CHANGE)` before `Updated(POST_RESOLUTION_CHANGE)`
+- **THEN** the cache SHALL be updated to the newly queried value
+
+#### Scenario: Frame rate unchanged on resolution-change callback — DeviceSettings backend
+- **WHEN** `OnResolutionPostChange` fires and the queried frame rate matches the cached value
+- **THEN** the backend SHALL NOT emit `Updated(FRAMERATE_CHANGE)`
 
 ---
 
@@ -243,6 +261,21 @@ Fired whenever the display connection or resolution changes.
 | `POST_RESOLUTION_CHANGE` | Resolution change has completed |
 | `HDMI_CHANGE` | HDMI hot-plug state changed |
 | `HDCP_CHANGE` | HDCP handshake state changed |
+| `FRAMERATE_CHANGE` | Active frame rate changed, detected during a resolution-change callback (DeviceSettings backend only); emitted before `POST_RESOLUTION_CHANGE` |
+
+---
+
+### Internal method – `CacheInitialFrameRateAsync` (not exposed via JSON-RPC or the interface)
+
+**Method:** `DisplayInfoImplementation::CacheInitialFrameRateAsync()` (DeviceSettings backend only)
+
+Run on a joinable background thread spawned from the `DisplayInfoImplementation`
+constructor, since `device::Manager::Initialize()` can return before the HAL is fully
+up. Queries `FrameRate()` and caches the result, retrying once after a fixed delay if
+the first attempt fails. Not bound to a JSON-RPC property or an
+`Exchange::IConnectionProperties` interface method; failures are logged only and never
+block plugin `Initialize()`. The destructor joins this thread before any other
+teardown, so it can never run against a partially- or fully-destroyed object.
 
 ---
 
@@ -769,7 +802,8 @@ Test cases:
 | `TVCapabilities_ExceptionHandling` | `TVCapabilities()` throws `device::Exception` |
 | `STBCapabilities_ExceptionHandling` | `STBCapabilities()` throws `device::Exception` |
 | `EDID_ExceptionHandling` | `EDID()` throws `device::Exception` |
-| `ResolutionChange_NotificationTest` | `Updated` event dispatch on resolution change |
+| `ResolutionChange_NotificationTest` | `Updated` event dispatch on resolution change, including `FRAMERATE_CHANGE` fired only when the frame rate differs from a cache seeded directly via `OnResolutionPostChange` |
+| `FrameRateChange_InitialCacheAsyncAtActivation` | Exercises the real constructor-spawned `CacheInitialFrameRateAsync()` path: mocks a 1080p60 display before `DisplayInfoImplementation` is constructed, waits for the background thread to cache `FRAMERATE_60`, then asserts `FRAMERATE_CHANGE` is suppressed when unchanged and raised when the rate changes to 50 |
 | `CurrentColorimetry_BT709` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_709` → `COLORIMETRY_BT709` |
 | `CurrentColorimetry_BT2020NCL` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_NCL` → `COLORIMETRY_BT2020RGB_YCBCR` |
 | `CurrentColorimetry_BT2020CL` | `GetCurrentColorimetry()` — `dsDISPLAY_MATRIXCOEFFICIENT_BT_2020_CL` → `COLORIMETRY_BT2020YCCBCBRC` |
@@ -852,7 +886,9 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoImplementation::GetCurrentColorimetry`
     - `DisplayInfoImplementation::ResolutionChangeImpl`
     - `DisplayInfoImplementation::OnResolutionPreChange`
-    - `DisplayInfoImplementation::OnResolutionPostChange`
+    - `DisplayInfoImplementation::OnResolutionPostChange` (emits `FRAMERATE_CHANGE` before `POST_RESOLUTION_CHANGE`)
+    - `DisplayInfoImplementation::CacheInitialFrameRateAsync`
+    - `DisplayInfoImplementation::IsFrameRateChanged`
 - `plugin/DeviceSettings/SoC_abstraction.h`:
     - `SoC_GetTotalGpuRam`
     - `SoC_GetFreeGpuRam`
@@ -949,6 +985,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoTestTest::STBCapabilities_ExceptionHandling`
     - `DisplayInfoTestTest::EDID_ExceptionHandling`
     - `DisplayInfoTestTest::ResolutionChange_NotificationTest`
+    - `DisplayInfoTestTest::FrameRateChange_InitialCacheAsyncAtActivation`
 
 ---
 
@@ -990,3 +1027,9 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - 2026-04-29 — openspec-sync-specs — Merged ADDED requirements from displayinfo-colorimetry change: REQ-F-11 (Colorimetry error handling), REQ-NF-05 (RAII memory management), DeviceSettings backend Colorimetry scenarios.
 - 2026-07-24 — openspec-templater — Updated `getCurrentColorimetry` property section: corrected interface method from `CurrentColorimetry(ColorimetryType&)` to `GetCurrentColorimetry(ColorimetryTypeInfo& info)`, revised condition table to reflect port-iteration strategy, explicit `dsDISPLAY_MATRIXCOEFFICIENT_UNKNOWN → COLORIMETRY_UNKNOWN` case, and `default → COLORIMETRY_OTHER`; added `GetCurrentColorimetry` to Covered Code for DeviceSettings and RPI backends; added 11 new `CurrentColorimetry_*` L1 test cases to Conformance Testing table.
 - 2026-08-20 — Aligned `STBCapabilities` and `TVCapabilities` using common `BuildHDRCapabilities()` which maps `dsHDRSTANDARD_Invalid -> HDR_OFF` and `dsHDRSTANDARD_SDR -> HDR_SDR`.
+- 2026-09-25 — displayinfo-framerate-change-event change — Added REQ-F-12 and DeviceSettings frame-rate change scenarios; added `FRAMERATE_CHANGE` to the `updated` event `Source` table; documented `InitializeFrameRate()` (called from `DisplayInfo::Initialize`, DeviceSettings/Linux/RPI return codes); added `InitializeFrameRate`/`IsFrameRateChanged` to Covered Code; added `InitializeFrameRate_Success` and `InitializeFrameRate_ExceptionHandling` L1 tests and extended `ResolutionChange_NotificationTest` coverage note.
+- 2026-09-28 — displayinfo-framerate-change-event change (revised) — Removed the `Exchange::IConnectionProperties::InitializeFrameRate()` interface method; the DeviceSettings backend now seeds the frame-rate cache asynchronously via `CacheInitialFrameRateAsync()`, spawned as a detached thread from the `DisplayInfoImplementation` constructor with a single retry. Updated REQ-F-12, the initialization scenario, the lifecycle diagram, and the External Interfaces section accordingly; removed `InitializeFrameRate_Success`/`InitializeFrameRate_ExceptionHandling` from Conformance Testing and Covered Code; `ResolutionChange_NotificationTest` now seeds its baseline frame rate via `OnResolutionPostChange` instead of calling the removed interface method.
+- 2026-09-29 — displayinfo-framerate-change-event change (revised again) — Added `FrameRateChange_InitialCacheAsyncAtActivation` to Conformance Testing and Covered Code (exercises the real constructor-spawned caching path end-to-end).
+- 2026-09-29 — displayinfo-framerate-change-event change (bugfix) — Fixed a use-after-free where `CacheInitialFrameRateAsync()`'s detached thread could outlive `DisplayInfoImplementation` (root cause of an L1 segfault and `getFrameRate()` mock-saturation failures). The thread is now joinable and the destructor joins it before any other teardown (a plain join, no shutdown-signal/condvar, for simplicity — accepted since this only blocks destruction when torn down within the ~2s caching window, which is not expected in real device operation). Updated the initialization scenario, the `CacheInitialFrameRateAsync` interface-method description, and REQ-NF-04 area to reflect this.
+- 2026-09-29 — displayinfo-framerate-change-event change (test bugfix) — A `DisplayInfoImplementation` alive for a test's whole duration (e.g. the fixture's own instance) can legitimately call `getFrameRate()` via its background thread while another instance's test body holds a strict `EXPECT_CALL(...).WillOnce(...)` on the same shared mock, causing residual `getFrameRate()` over-saturation failures. Changed `FrameRate` and `ResolutionChange_NotificationTest` to use `ON_CALL(...).WillByDefault(...)` for `getFrameRate()` instead, since these tests assert on the explicit call's return value, not on invocation count.
+- 2026-09-29 — displayinfo-framerate-change-event change (revised again) — Added `FrameRateChange_InitialCacheAsyncAtActivation` L1 test, which exercises the real constructor-spawned `CacheInitialFrameRateAsync()` path end-to-end (1080p60 baseline, unchanged-vs-changed-rate scenarios) instead of manually seeding the cache; hoisted the shared `DisplayInfoNotificationHandler` test helper to file scope; added the new test to Conformance Testing and Covered Code.
