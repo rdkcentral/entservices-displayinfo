@@ -44,6 +44,13 @@ include_directories(include)
 include_directories(${STAGING_INCDIR})
 include_directories(${STAGING_INCDIR}/libdrm)
 
+# Build an in-tree stub displayinfo-soc when the platform has no vendor provided one.
+# Being a target in this project, it is always built before and linked into the plugin.
+option(USE_DISPLAYINFO_SOC_STUB "Build stub displayinfo-soc library" OFF)
+if (USE_DEVICESETTINGS AND USE_DISPLAYINFO_SOC_STUB)
+    add_subdirectory(DeviceSettings/Stub)
+endif()
+
 add_library(${MODULE_NAME} SHARED
     DisplayInfo.cpp
     Module.cpp)
