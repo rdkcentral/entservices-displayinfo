@@ -305,6 +305,69 @@ public:
     // -------------------------------------------------------------------------
     // IConnectionProperties — query methods
     // -------------------------------------------------------------------------
+    void ResolutionChangeImpl(IConnectionProperties::INotification::Source eventtype)
+    {
+        _adminLock.Lock();
+        std::list<IConnectionProperties::INotification*>::const_iterator index = _observers.begin();
+        while(index != _observers.end()) {
+            (*index)->Updated(eventtype);
+            index++;
+        }
+        _adminLock.Unlock();
+    }
+
+    bool IsFrameRateChanged()
+    {
+        FrameRateType newRate = FRAMERATE_UNKNOWN;
+
+        _frameRateLock.Lock();
+        try
+        {
+            FrameRate(newRate);
+            LOGINFO("Current Framerate = %d", static_cast<int>(newRate));
+        }
+        catch(const std::exception& e)
+        {
+           LOGERR("failed to get framerate %s", e.what());
+        }
+        catch(...)
+        {
+           LOGERR("failed to get framerate with unknown exception");
+        }
+
+        bool changed = (newRate != _cachedFrameRate);
+        _cachedFrameRate = newRate;
+        _frameRateLock.Unlock();
+
+        return changed;
+    }
+
+    void CacheInitialFrameRate()
+    {
+        Core::hresult result = Core::ERROR_GENERAL;
+        _frameRateLock.Lock();
+        try
+        {
+            result = FrameRate(_cachedFrameRate);
+            LOGINFO("caching initial frame rate = %d", static_cast<int>(_cachedFrameRate));
+        }
+        catch(const std::exception& e)
+        {
+            LOGERR("frame-rate cache failed: %s", e.what());
+        }
+        catch(...)
+        {
+            LOGERR("frame-rate cache failed with unknown exception");
+        }
+        _frameRateLock.Unlock();
+
+        if (result == Core::ERROR_NONE) {
+            return;
+        }
+        else {
+            LOGERR("Failed to cache initial frame rate");
+        }
+    }
 
     Core::hresult IsAudioPassthrough(bool& value) const override
     {
@@ -1079,22 +1142,27 @@ private:
     void Dispatch(Event ev)
     {
         if (ev == EV_RESOLUTION_PRE_CHANGE) {
-            LOGINFO("Dispatch - EV_RESOLUTION_PRE_CHANGE");
             // Handle pre-resolution change notification
-            _adminLock.Lock();
-            for (auto* obs : _observers) {
-                obs->Updated(IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
+            LOGINFO("Dispatch - EV_RESOLUTION_PRE_CHANGE");
+            if(DisplayInfoImplementation::_instance)
+            {
+                DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::PRE_RESOLUTION_CHANGE);
             }
-            _adminLock.Unlock();
-        } else if (ev == EV_RESOLUTION_POST_CHANGE) {
+        }
+        else if (ev == EV_RESOLUTION_POST_CHANGE) {
             LOGINFO("Dispatch - EV_RESOLUTION_POST_CHANGE");
             // Handle post-resolution change notification
-            _adminLock.Lock();
-            for (auto* obs : _observers) {
-                obs->Updated(IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
+            if (DisplayInfoImplementation::_instance)
+            {
+                bool isFrameRateChanged = DisplayInfoImplementation::_instance->IsFrameRateChanged();
+                if (isFrameRateChanged) {
+                    LOGINFO("Triggering FrameRateChange event");
+                    DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::FRAMERATE_CHANGE);
+                }
+                DisplayInfoImplementation::_instance->ResolutionChangeImpl(IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
             }
-            _adminLock.Unlock();
-        } else if (ev == EV_DS_ACTIVATED_INIT) {
+        }
+        else if (ev == EV_DS_ACTIVATED_INIT) {
             LOGINFO("Dispatch - EV_DS_ACTIVATED_INIT");
             // Handle initialization on worker thread
             DispatchInit();
@@ -1143,6 +1211,8 @@ private:
                 LOGERR("DispatchInit: IDeviceSettingsDisplay not available");
             }
         }
+        LOGINFO("Caching initial frame rate");
+        CacheInitialFrameRate();
     }
 
     mutable Core::CriticalSection                    _adminLock;
