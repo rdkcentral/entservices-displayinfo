@@ -1216,6 +1216,8 @@ private:
     }
 
     mutable Core::CriticalSection                    _adminLock;
+    mutable Core::CriticalSection                    _frameRateLock;
+    FrameRateType _cachedFrameRate { FRAMERATE_UNKNOWN };
     std::list<IConnectionProperties::INotification*> _observers;
     VideoPortType                                    _defaultPortType;
     int32_t                                          _displayHandle;      ///< display handle for default video port (EDID access)
