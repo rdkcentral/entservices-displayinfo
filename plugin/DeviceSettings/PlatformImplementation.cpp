@@ -723,7 +723,7 @@ public:
             return Core::ERROR_UNAVAILABLE;
         }
         Exchange::IDeviceSettingsVideoPort::VideoPortResolution resolution;
-        Core::hresult rc = vp->GetVideoPortResolution(vpHandle, resolution);
+        Core::hresult rc = vp->GetVideoPortResolution(vpHandle, resolution, false);
         vp->Release();
 
         if (rc == Core::ERROR_NONE) {

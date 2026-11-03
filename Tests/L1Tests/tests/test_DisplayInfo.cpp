@@ -160,8 +160,8 @@ protected:
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<2>(10), ::testing::Return(Core::ERROR_NONE)));
         ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(true), ::testing::Return(Core::ERROR_NONE)));
-        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPortResolution(::testing::_, ::testing::_))
-            .WillByDefault(::testing::Invoke([](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution) {
+        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPortResolution(::testing::_, ::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke([](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution, bool) {
                 resolution.name = "1080p60";
                 resolution.pixelResolution = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PIXELRES_1920X1080;
                 resolution.aspectRatio = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_ASPECT_RATIO_16X9;
