@@ -72,10 +72,7 @@ class DisplayInfoTest : public ::testing::Test {
 protected:
     Core::ProxyType<Plugin::DisplayInfo> plugin;
     Core::ProxyType<Plugin::DisplayInfoImplementation> displayInfoImplementation;
-    // Every Root<>()/Instantiate() call below creates a brand new DisplayInfoImplementation
-    // (each spawning its own CacheInitialFrameRateAsync() background thread), not just the
-    // first one assigned to displayInfoImplementation. Track all of them so every one can be
-    // released - and its thread joined - while the mocks below are still installed.
+    // Keep implementations alive until the fixture has finished using the COM-RPC mocks.
     std::vector<Core::ProxyType<Plugin::DisplayInfoImplementation>> _allDisplayInfoImplementations;
     Core::JSONRPC::Handler& handler;
     DECL_CORE_JSONRPC_CONX connection;
@@ -94,6 +91,8 @@ protected:
     std::mutex deviceSettingsMutex;
     std::condition_variable deviceSettingsCondition;
     bool deviceSettingsInitialized = false;
+    Exchange::IDeviceSettingsVideoPort::VideoFrameRate frameRateForTest =
+        Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_60;
 
     static std::vector<uint8_t> DetailedTimingEdid(
         uint16_t width, uint16_t height, uint16_t horizontalBlanking = 0,
@@ -111,17 +110,6 @@ protected:
         edid[127] = 1;
         return edid;
     }
-
-    // Fixture-lifetime backing objects for tests that bind them via ReturnRef(...) to mocks
-    // CacheInitialFrameRateAsync()'s background worker can still call after a TEST_F body
-    // returns (and before ~DisplayInfoTest() joins every spawned worker). Declaring these as
-    // TEST_F-local objects instead would let that worker dereference freed stack memory.
-    device::VideoOutputPort videoOutputPort;
-    device::VideoResolution videoResolution;
-    device::PixelResolution pixelResolution;
-    device::FrameRate frameRate24{dsVIDEO_FRAMERATE_24};
-    device::FrameRate frameRate50{dsVIDEO_FRAMERATE_50};
-    device::FrameRate frameRate60{dsVIDEO_FRAMERATE_60};
 
     DisplayInfoTest()
     : plugin(Core::ProxyType<Plugin::DisplayInfo>::Create())
@@ -303,11 +291,6 @@ protected:
                      displayInfoImplementation->getDefaultVideoPortName()),
                  static_cast<int>(displayInfoImplementation->IsOperational()));
 
-        ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
-            .WillByDefault(::testing::ReturnRef(videoOutputPort));
-        ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-            .WillByDefault(::testing::Return(false));
-
         dispatcher = static_cast<PLUGINHOST_DISPATCHER*>(
         plugin->QueryInterface(PLUGINHOST_DISPATCHER_ID));
         dispatcher->Activate(&service);
@@ -326,12 +309,7 @@ protected:
     {
         plugin->Deinitialize(&service);
 
-        // Every instance created via the COMLink Instantiate() mock (see _allDisplayInfoImplementations)
-        // holds a fixture-owned reference separate from whatever Deinitialize()/the test body released,
-        // so each object would otherwise survive until this fixture's members are destroyed - i.e. after
-        // the mocks below are torn down. Release them all now, while the mocks are still installed, so
-        // each object's destructor (which joins its CacheInitialFrameRateAsync() background thread) runs
-        // at a safe time.
+        // Release tracked COMLink instances while the mocks are still installed.
         for (auto& impl : _allDisplayInfoImplementations) {
             if (impl.IsValid()) {
                 impl.Release();
@@ -2081,8 +2059,9 @@ TEST_F(DisplayInfoTestTest, EDID_ExceptionHandling)
     connectionProperties->Release();
 }
 
-// Notification handler shared by ResolutionChange_NotificationTest and
-// FrameRateChange_InitialCacheAsyncAtActivation, following the HdmiCecSource pattern.
+#endif
+
+// Notification handler shared by resolution and frame-rate change tests.
 class DisplayInfoNotificationHandler : public Exchange::IConnectionProperties::INotification {
 private:
     std::mutex m_mutex;
@@ -2172,7 +2151,7 @@ public:
  * - Threading and synchronization aspects of notification delivery
  * - Cleanup and unregistration of notification handlers
  */
-TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
+TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest_Observers)
 {
     // Create notification sink similar to HdmiCecSource pattern
     Core::Sink<DisplayInfoNotificationHandler> notification;
@@ -2213,54 +2192,6 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
         // Wait for notification with timeout
         bool eventReceived = notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE);
         EXPECT_TRUE(eventReceived);
-    }
-
-    // Test FRAMERATE_CHANGE event - only fired when the frame rate differs from the cached value
-    {
-        string videoPort(_T("HDMI0"));
-
-        ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
-            .WillByDefault(::testing::Return(videoPort));
-        ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
-            .WillByDefault(::testing::ReturnRef(videoOutputPort));
-        ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-            .WillByDefault(::testing::Return(true));
-        ON_CALL(*p_videoOutputPortMock, getResolution())
-            .WillByDefault(::testing::ReturnRef(videoResolution));
-        ON_CALL(*p_videoResolutionMock, getPixelResolution())
-            .WillByDefault(::testing::ReturnRef(pixelResolution));
-
-        // Seed the baseline frame rate cache (24 fps) directly via a resolution-change
-        // callback, exercising IsFrameRateChanged()'s diff logic in isolation. The real
-        // constructor-spawned CacheInitialFrameRateAsync() path is covered separately by
-        // FrameRateChange_InitialCacheAsyncAtActivation below.
-        // ON_CALL (not EXPECT_CALL) since a concurrently-alive DisplayInfoImplementation's
-        // own background caching thread may also call getFrameRate() against this mock.
-        notification.Reset();
-        ON_CALL(*p_videoResolutionMock, getFrameRate())
-            .WillByDefault(::testing::ReturnRef(frameRate24));
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 1920, 1080 );
-        EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
-
-        notification.Reset();
-
-        // Frame rate unchanged - no FRAMERATE_CHANGE expected
-        ON_CALL(*p_videoResolutionMock, getFrameRate())
-            .WillByDefault(::testing::ReturnRef(frameRate24));
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 1920, 1080 );
-
-        EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
-        EXPECT_FALSE(notification.WaitForEvent(500, Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE));
-
-        notification.Reset();
-
-        // Frame rate changes to 60 fps - FRAMERATE_CHANGE expected alongside POST_RESOLUTION_CHANGE
-        ON_CALL(*p_videoResolutionMock, getFrameRate())
-            .WillByDefault(::testing::ReturnRef(frameRate60));
-        Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 3840, 2160 );
-
-        EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE));
-        EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
     }
 
     // Test multiple observers
@@ -2310,77 +2241,51 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
 }
 
 /**
- * @brief Test that the frame rate cache seeded asynchronously at activation
- * (DisplayInfoImplementation's constructor spawning CacheInitialFrameRateAsync()) is used
- * as the baseline for FRAMERATE_CHANGE detection on subsequent resolution-change callbacks.
+ * @brief Test that the COM-RPC frame-rate cache is used to detect frame-rate changes.
  *
- * Simulates a 1080p60 display: activation caches FRAMERATE_60. A later resolution change
- * with the frame rate still at 60 SHALL NOT raise FRAMERATE_CHANGE; a later resolution
- * change where the frame rate differs (60 -> 50) SHALL raise FRAMERATE_CHANGE alongside
- * POST_RESOLUTION_CHANGE.
+ * A COM-RPC 60 fps response seeds the cache. A later resolution change with the
+ * frame rate still at 60 SHALL NOT raise FRAMERATE_CHANGE; a change from 60 to 50
+ * SHALL raise FRAMERATE_CHANGE alongside POST_RESOLUTION_CHANGE.
  */
-TEST_F(DisplayInfoTestTest, FrameRateChange_InitialCacheAsyncAtActivation)
+TEST_F(DisplayInfoTestTest, FrameRateChange_ComRpcCacheAndNotification)
 {
-    // Mocks must be in place before Root<>() below constructs DisplayInfoImplementation,
-    // since its constructor immediately spawns the CacheInitialFrameRateAsync() thread,
-    // which sleeps ~1s before its first FrameRate() query.
-    device::VideoOutputPort videoOutputPort;
-    device::VideoResolution videoResolution;
-    device::PixelResolution pixelResolution;
-    device::FrameRate frameRate60(dsVIDEO_FRAMERATE_60);
-    device::FrameRate frameRate50(dsVIDEO_FRAMERATE_50);
-    string videoPort(_T("HDMI0"));
+    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPortResolution(::testing::_, ::testing::_, ::testing::_))
+        .WillByDefault(::testing::Invoke(
+            [this](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution, bool) {
+                resolution.frameRate = frameRateForTest;
+                return Core::ERROR_NONE;
+            }));
 
-    ON_CALL(*p_hostImplMock, getDefaultVideoPortName())
-        .WillByDefault(::testing::Return(videoPort));
-    ON_CALL(*p_hostImplMock, getVideoOutputPort(::testing::_))
-        .WillByDefault(::testing::ReturnRef(videoOutputPort));
-    ON_CALL(*p_videoOutputPortMock, isDisplayConnected())
-        .WillByDefault(::testing::Return(true));
-    ON_CALL(*p_videoOutputPortMock, getResolution())
-        .WillByDefault(::testing::ReturnRef(videoResolution));
-    ON_CALL(*p_videoResolutionMock, getPixelResolution())
-        .WillByDefault(::testing::ReturnRef(pixelResolution));
-    // 1080p60 baseline - activation SHALL cache FRAMERATE_60
-    ON_CALL(*p_videoResolutionMock, getFrameRate())
-        .WillByDefault(::testing::ReturnRef(frameRate60));
-
-    // Root<>() triggers construction of a fresh DisplayInfoImplementation, spawning its
-    // own CacheInitialFrameRateAsync() thread against the mocks configured above.
     uint32_t _connectionId = 0;
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
     ASSERT_NE(connectionProperties, nullptr);
 
-    // Allow the background thread's first (1s-delayed) attempt to complete and cache FRAMERATE_60.
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    displayInfoImplementation->CacheInitialFrameRate();
+    EXPECT_EQ(displayInfoImplementation->_cachedFrameRate, Exchange::IDisplayProperties::FRAMERATE_60);
 
     Core::Sink<DisplayInfoNotificationHandler> notification;
     uint32_t result = connectionProperties->Register(&notification);
     EXPECT_EQ(result, Core::ERROR_NONE);
 
+    Core::Sink<Plugin::DisplayInfoImplementation::DSVideoPortNotification> videoPortNotification(
+        *Plugin::DisplayInfoImplementation::_instance);
+
     // Frame rate unchanged (still 60 fps) - FRAMERATE_CHANGE SHALL NOT be raised
     notification.Reset();
-    Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 1920, 1080 );
+    videoPortNotification.OnResolutionPostChange({1920, 1080});
     EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
     EXPECT_FALSE(notification.WaitForEvent(500, Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE));
 
     // Frame rate differs from the cached baseline (60 -> 50) - FRAMERATE_CHANGE SHALL be raised
     notification.Reset();
-    ON_CALL(*p_videoResolutionMock, getFrameRate())
-        .WillByDefault(::testing::ReturnRef(frameRate50));
-    Plugin::DisplayInfoImplementation::_instance->OnResolutionPostChange( 3840, 2160 );
+    frameRateForTest = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_50;
+    videoPortNotification.OnResolutionPostChange({3840, 2160});
     EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::FRAMERATE_CHANGE));
     EXPECT_TRUE(notification.WaitForEvent(1000, Exchange::IConnectionProperties::INotification::Source::POST_RESOLUTION_CHANGE));
 
     connectionProperties->Unregister(&notification);
     connectionProperties->Release();
 }
-
-// ============================================================================
-// getCurrentColorimetry tests (Tasks 5.1 – 5.10)
-// ============================================================================
-
-#endif
 
 /**
  * @brief Test getCurrentColorimetry: display connected, BT.709 matrix coefficient
