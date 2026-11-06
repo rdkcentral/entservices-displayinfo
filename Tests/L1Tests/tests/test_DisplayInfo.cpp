@@ -67,6 +67,22 @@ using namespace WPEFramework;
 
 using ::testing::NiceMock;
 
+template <typename Mock, typename Action>
+auto ConfigureGetVideoPortResolution(Mock& mock, Action action, int)
+    -> decltype(mock.gmock_GetVideoPortResolution(::testing::_, ::testing::_, ::testing::_), void())
+{
+    ON_CALL(mock, GetVideoPortResolution(::testing::_, ::testing::_, ::testing::_))
+        .WillByDefault(::testing::Invoke(action));
+}
+
+template <typename Mock, typename Action>
+auto ConfigureGetVideoPortResolution(Mock& mock, Action action, long)
+    -> decltype(mock.gmock_GetVideoPortResolution(::testing::_, ::testing::_), void())
+{
+    ON_CALL(mock, GetVideoPortResolution(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Invoke(action));
+}
+
 #define TEST_LOG(x, ...) fprintf(stderr, "\033[1;32m[%s:%d](%s)<PID:%d><TID:%d>" x "\n\033[0m", __FILE__, __LINE__, __FUNCTION__, getpid(), gettid(), ##__VA_ARGS__); fflush(stderr);
 class DisplayInfoTest : public ::testing::Test {
 protected:
@@ -148,8 +164,7 @@ protected:
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<2>(10), ::testing::Return(Core::ERROR_NONE)));
         ON_CALL(DeviceSettingsVideoPortMock::Mock(), IsVideoPortDisplayConnected(::testing::_, ::testing::_))
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(true), ::testing::Return(Core::ERROR_NONE)));
-        ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPortResolution(::testing::_, ::testing::_, ::testing::_))
-            .WillByDefault(::testing::Invoke([](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution, bool) {
+        ConfigureGetVideoPortResolution(DeviceSettingsVideoPortMock::Mock(), [](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution, auto...) {
                 resolution.name = "1080p60";
                 resolution.pixelResolution = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_PIXELRES_1920X1080;
                 resolution.aspectRatio = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_ASPECT_RATIO_16X9;
@@ -157,7 +172,7 @@ protected:
                 resolution.frameRate = Exchange::IDeviceSettingsVideoPort::DS_VIDEO_FRAMERATE_60;
                 resolution.interlaced = false;
                 return Core::ERROR_NONE;
-            }));
+            }, 0);
         ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetColorSpace(::testing::_, ::testing::_))
             .WillByDefault(::testing::DoAll(::testing::SetArgReferee<1>(Exchange::IDeviceSettingsVideoPort::DS_DISPLAY_COLORSPACE_RGB), ::testing::Return(Core::ERROR_NONE)));
         ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetColorDepth(::testing::_, ::testing::_))
@@ -2249,12 +2264,11 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest_Observers)
  */
 TEST_F(DisplayInfoTestTest, FrameRateChange_ComRpcCacheAndNotification)
 {
-    ON_CALL(DeviceSettingsVideoPortMock::Mock(), GetVideoPortResolution(::testing::_, ::testing::_, ::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [this](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution, bool) {
+    ConfigureGetVideoPortResolution(DeviceSettingsVideoPortMock::Mock(),
+            [this](int32_t, Exchange::IDeviceSettingsVideoPort::VideoPortResolution& resolution, auto...) {
                 resolution.frameRate = frameRateForTest;
                 return Core::ERROR_NONE;
-            }));
+            }, 0);
 
     uint32_t _connectionId = 0;
     Exchange::IConnectionProperties* connectionProperties = service.Root<Exchange::IConnectionProperties>(_connectionId, 2000, _T("DisplayInfoImplementation"));
