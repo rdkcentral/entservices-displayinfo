@@ -118,11 +118,13 @@ add_plugin_test_ex(PLUGIN_DISPLAYINFO "${DISPLAYINFO_SRC}" "${DISPLAYINFO_INC}" 
 
 add_library(${MODULE_NAME} SHARED ${TEST_SRC})
 
+find_library(DRM_LIBRARY drm REQUIRED)
+
 include_directories(${TEST_INC})
 
 target_link_directories(${MODULE_NAME} PUBLIC ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib/wpeframework/plugins)
 
-target_link_libraries(${MODULE_NAME} ${TEST_LIB})
+target_link_libraries(${MODULE_NAME} ${TEST_LIB} ${DRM_LIBRARY})
 
 target_include_directories(${MODULE_NAME}
         PUBLIC
