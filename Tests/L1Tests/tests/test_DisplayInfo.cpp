@@ -526,6 +526,9 @@ TEST_F(DisplayInfoTestTest, ResolutionChange_NotificationTest)
             lastSource = source;
             condition.notify_one();
         }
+        void DisplayConnectionChanged(const bool /* connected */) override
+        {
+        }
         bool WaitFor(const Exchange::IConnectionProperties::INotification::Source source)
         {
             std::unique_lock<std::mutex> lock(mutex);
@@ -2093,6 +2096,10 @@ public:
     DisplayInfoNotificationHandler() {}
     ~DisplayInfoNotificationHandler() {}
 
+    void DisplayConnectionChanged(const bool /* connected */) override
+    {
+    }
+
     void Updated(const Exchange::IConnectionProperties::INotification::Source event) override
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -2153,6 +2160,105 @@ public:
         m_frameRateChange_signalled = false;
     }
 };
+
+class DisplayConnectionNotificationHandler : public Exchange::IConnectionProperties::INotification {
+public:
+    explicit DisplayConnectionNotificationHandler(bool blockFirst = false)
+        : _blockFirst(blockFirst)
+    {
+    }
+
+    void Updated(const Exchange::IConnectionProperties::INotification::Source /* event */) override
+    {
+    }
+
+    void DisplayConnectionChanged(const bool connected) override
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        _connections.push_back(connected);
+        _condition.notify_all();
+        if (_blockFirst && _connections.size() == 1) {
+            EXPECT_TRUE(_condition.wait_for(lock, std::chrono::seconds(5),
+                [this]() { return !_blockFirst; }));
+        }
+    }
+
+    std::vector<bool> WaitForConnections(size_t count)
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        EXPECT_TRUE(_condition.wait_for(lock, std::chrono::seconds(5),
+            [this, count]() { return _connections.size() >= count; }));
+        return _connections;
+    }
+
+    void ReleaseFirstConnection()
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _blockFirst = false;
+        _condition.notify_all();
+    }
+
+    BEGIN_INTERFACE_MAP(DisplayConnectionNotificationHandler)
+    INTERFACE_ENTRY(Exchange::IConnectionProperties::INotification)
+    END_INTERFACE_MAP
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _condition;
+    std::vector<bool> _connections;
+    bool _blockFirst;
+};
+
+TEST_F(DisplayInfoTestTest, DisplayConnectionChanged_QueuedTransitionsInOrder)
+{
+    Core::Sink<DisplayConnectionNotificationHandler> notification(true);
+    EXPECT_EQ(displayInfoImplementation->Register(&notification), Core::ERROR_NONE);
+    Core::Sink<Plugin::DisplayInfoImplementation::DSDisplayHDMIHotPlugNotification> hotPlugNotification(
+        *displayInfoImplementation);
+    using DisplayEvent = Exchange::IDeviceSettingsDisplay::DisplayEvent;
+
+    hotPlugNotification.OnDisplayHDMIHotPlug(DisplayEvent::DS_DISPLAY_EVENT_CONNECTED);
+    EXPECT_EQ(notification.WaitForConnections(1), std::vector<bool>({ true }));
+
+    std::vector<bool> expected { true };
+    for (size_t index = 1; index < 64; ++index) {
+        const bool connected = (index % 2 == 0);
+        expected.push_back(connected);
+        hotPlugNotification.OnDisplayHDMIHotPlug(connected
+            ? DisplayEvent::DS_DISPLAY_EVENT_CONNECTED
+            : DisplayEvent::DS_DISPLAY_EVENT_DISCONNECTED);
+    }
+    notification.ReleaseFirstConnection();
+    EXPECT_EQ(notification.WaitForConnections(expected.size()), expected);
+
+    hotPlugNotification.OnDisplayHDMIHotPlug(DisplayEvent::DS_DISPLAY_EVENT_CONNECTED);
+    expected.push_back(true);
+    EXPECT_EQ(notification.WaitForConnections(expected.size()), expected);
+    EXPECT_EQ(displayInfoImplementation->Unregister(&notification), Core::ERROR_NONE);
+}
+
+TEST_F(DisplayInfoTestTest, DisplayConnectionChanged_DispatchesOnOwningInstance)
+{
+    auto secondImplementation = Core::ProxyType<Plugin::DisplayInfoImplementation>::Create();
+    Core::Sink<DisplayConnectionNotificationHandler> firstNotification;
+    Core::Sink<DisplayConnectionNotificationHandler> secondNotification;
+    EXPECT_EQ(displayInfoImplementation->Register(&firstNotification), Core::ERROR_NONE);
+    EXPECT_EQ(secondImplementation->Register(&secondNotification), Core::ERROR_NONE);
+    Core::Sink<Plugin::DisplayInfoImplementation::DSDisplayHDMIHotPlugNotification> firstHotPlug(
+        *displayInfoImplementation);
+    Core::Sink<Plugin::DisplayInfoImplementation::DSDisplayHDMIHotPlugNotification> secondHotPlug(
+        *secondImplementation);
+    using DisplayEvent = Exchange::IDeviceSettingsDisplay::DisplayEvent;
+
+    firstHotPlug.OnDisplayHDMIHotPlug(DisplayEvent::DS_DISPLAY_EVENT_CONNECTED);
+    secondHotPlug.OnDisplayHDMIHotPlug(DisplayEvent::DS_DISPLAY_EVENT_DISCONNECTED);
+    EXPECT_EQ(firstNotification.WaitForConnections(1), std::vector<bool>({ true }));
+    EXPECT_EQ(secondNotification.WaitForConnections(1), std::vector<bool>({ false }));
+
+    EXPECT_EQ(displayInfoImplementation->Unregister(&firstNotification), Core::ERROR_NONE);
+    EXPECT_EQ(secondImplementation->Unregister(&secondNotification), Core::ERROR_NONE);
+    secondImplementation.Release();
+}
 
 /**
  * @brief Test ResolutionChange notification handling to validate event system functionality

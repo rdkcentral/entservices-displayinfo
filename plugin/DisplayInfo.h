@@ -51,6 +51,11 @@ namespace Plugin {
                 Exchange::JConnectionProperties::Event::Updated(_parent, event);
             }
 
+            void DisplayConnectionChanged(const bool isConnected) override
+            {
+                Exchange::JConnectionProperties::Event::DisplayConnectionChanged(_parent, isConnected);
+            }
+
             void Activated(RPC::IRemoteConnection* connection VARIABLE_IS_NOT_USED) override {
             }
 
