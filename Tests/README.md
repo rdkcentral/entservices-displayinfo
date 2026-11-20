@@ -13,6 +13,20 @@ c/ Build entservices-testframework => To create L1/L2  executable by linking the
 ```
 This ensures everything in-tact in repo level across multiple related plugins when there is a new change comes in.
 
+## DisplayInfo notification regression tests
+
+The L1 `DisplayConnectionChanged_*` tests cover FIFO delivery of queued HDMI
+connection/disconnection transitions and observer isolation between implementation
+instances. Resolution-only observers also implement the connection callback required
+by the updated `IConnectionProperties::INotification` interface.
+
+Run these cases together with the existing resolution/frame-rate notification cases
+using the testframework runner's GTest filter:
+
+```
+--gtest_filter='DisplayInfoTestTest.DisplayConnectionChanged_*:DisplayInfoTestTest.ResolutionChange_NotificationTest*:DisplayInfoTestTest.FrameRateChange_ComRpcCacheAndNotification'
+```
+
 ##### Steps to run L1, L2, L2-OOP test locally #####
 ```
 1. checkout the entservices-<repo-name> to your working directory in your build machine.
