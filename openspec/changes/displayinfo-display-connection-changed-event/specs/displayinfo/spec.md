@@ -50,8 +50,10 @@ be emitted for a callback that does not change the HDMI connection state.
 - **THEN** the plugin MUST NOT emit `DisplayConnectionChanged`
 
 #### Scenario: Startup without a connection transition
-- **WHEN** the plugin activates and observes the initial HDMI connection state
+- **WHEN** the plugin activates and no hardware callback has been received
 - **THEN** the plugin MUST NOT emit `DisplayConnectionChanged` merely for activation
+- **AND** the connection state is treated as unknown; the plugin does not query the initial state
+- **AND** the first hardware callback after activation or reactivation is reported, because there is no earlier reported state to compare it with
 
 ### Requirement: DisplayConnectionChanged carries the new connection state
 

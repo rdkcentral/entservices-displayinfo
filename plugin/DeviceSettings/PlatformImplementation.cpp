@@ -44,6 +44,8 @@
 #include <interfaces/IDeviceSettingsDisplay.h>     // Exchange::IDeviceSettingsDisplay (GetDisplay, GetDisplayEdidBytes)
 
 #include "UtilsLogging.h"
+#include <list>
+#include <utility>
 
 #define EDID_MAX_HORIZONTAL_SIZE 21
 #define EDID_MAX_VERTICAL_SIZE   22
@@ -301,6 +303,14 @@ public:
     void OnDeviceSettingsDeactivated() override
     {
         LOGINFO("DisplayInfo: DeviceSettings deactivated — clearing cached handles");
+        {
+            // Drop queued hot-plug events; a running worker keeps ownership of
+            // _displayDispatchScheduled and resets it when it finds the queue empty.
+            Core::SafeSyncType<Core::CriticalSection> lock(_displayEventLock);
+            _displayGeneration++;
+            _displayEvents.clear();
+            _lastConnectionState = ConnectionState::UNKNOWN;
+        }
         _displayHandle   = INVALID_DS_HANDLE;
         _defaultPortType = VideoPortType::DS_VIDEO_PORT_TYPE_HDMI;
     }
@@ -364,13 +374,20 @@ public:
 
     void DisplayConnectionChangedImpl(const bool isConnected)
     {
+        // Observers are referenced under the lock and invoked outside it, so
+        // Unregister() from within a callback can neither deadlock nor
+        // invalidate the iteration.
         _adminLock.Lock();
-        std::list<IConnectionProperties::INotification*>::const_iterator index = _observers.begin();
-        while(index != _observers.end()) {
-            (*index)->DisplayConnectionChanged(isConnected);
-            index++;
+        std::list<IConnectionProperties::INotification*> observers(_observers);
+        for (auto* observer : observers) {
+            observer->AddRef();
         }
         _adminLock.Unlock();
+
+        for (auto* observer : observers) {
+            observer->DisplayConnectionChanged(isConnected);
+            observer->Release();
+        }
     }
 
     bool IsFrameRateChanged()
@@ -1193,7 +1210,12 @@ private:
             bool dispatchScheduled;
             {
                 Core::SafeSyncType<Core::CriticalSection> lock(_displayEventLock);
-                _displayEvents.push_back(ev);
+                const ConnectionState state = (ev == EV_DISPLAY_CONNECTED) ? ConnectionState::CONNECTED : ConnectionState::DISCONNECTED;
+                if (state == _lastConnectionState) {
+                    return; // repeat of the last reported state
+                }
+                _lastConnectionState = state;
+                _displayEvents.push_back(std::make_pair(ev, _displayGeneration));
                 dispatchScheduled = _displayDispatchScheduled;
                 _displayDispatchScheduled = true;
             }
@@ -1215,8 +1237,12 @@ private:
                     _displayDispatchScheduled = false;
                     return;
                 }
-                ev = _displayEvents.front();
+                const std::pair<Event, uint32_t> queued = _displayEvents.front();
                 _displayEvents.pop_front();
+                if (queued.second != _displayGeneration) {
+                    continue; // queued before a DeviceSettings deactivation
+                }
+                ev = queued.first;
             }
 
             const bool connected = (ev == EV_DISPLAY_CONNECTED);
@@ -1311,7 +1337,10 @@ private:
     mutable Core::CriticalSection                    _adminLock;
     mutable Core::CriticalSection                    _frameRateLock;
     Core::CriticalSection                            _displayEventLock;
-    std::list<Event>                                 _displayEvents;
+    std::list<std::pair<Event, uint32_t>>            _displayEvents;
+    uint32_t                                         _displayGeneration { 0 };
+    enum class ConnectionState : uint8_t { UNKNOWN, CONNECTED, DISCONNECTED };
+    ConnectionState                                  _lastConnectionState { ConnectionState::UNKNOWN };
     bool                                            _displayDispatchScheduled { false };
     FrameRateType _cachedFrameRate { FRAMERATE_UNKNOWN };
     std::list<IConnectionProperties::INotification*> _observers;

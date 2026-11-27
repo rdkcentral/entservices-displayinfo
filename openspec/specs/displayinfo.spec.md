@@ -290,6 +290,10 @@ add a manually registered alias.
 - **WHEN** the display is disconnected from the primary HDMI output
 - **THEN** subscribed clients MUST receive `displayconnectionchanged` with `{"connected":false}`
 
+#### Scenario: Repeated connection state
+- **WHEN** a hardware callback reports the same state as the last reported one
+- **THEN** no event is emitted; the last-reported state is unknown until the first callback after activation, which is always reported
+
 #### Scenario: Successive connection transitions
 - **WHEN** connection and disconnection occur before queued notifications finish
 - **THEN** each payload MUST retain its associated transition state and be delivered in transition order
