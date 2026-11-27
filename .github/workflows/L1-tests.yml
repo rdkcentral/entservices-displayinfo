@@ -185,7 +185,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-apis
           path: entservices-apis
-          ref: RDKEMW-29063
+          ref: 5.0.3
 
       - name: Apply patches entservices-apis
         run: |
