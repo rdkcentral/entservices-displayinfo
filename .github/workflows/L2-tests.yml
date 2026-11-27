@@ -160,7 +160,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-apis
           path: entservices-apis
-          ref: ${{env.INTERFACES_REF}}
+          ref: RDKEMW-29063
 
       - name: Apply patches entservices-apis
         run: |
