@@ -374,20 +374,13 @@ public:
 
     void DisplayConnectionChangedImpl(const bool isConnected)
     {
-        // Observers are referenced under the lock and invoked outside it, so
-        // Unregister() from within a callback can neither deadlock nor
-        // invalidate the iteration.
         _adminLock.Lock();
-        std::list<IConnectionProperties::INotification*> observers(_observers);
-        for (auto* observer : observers) {
-            observer->AddRef();
+        std::list<IConnectionProperties::INotification*>::const_iterator index = _observers.begin();
+        while(index != _observers.end()) {
+            (*index)->DisplayConnectionChanged(isConnected);
+            index++;
         }
         _adminLock.Unlock();
-
-        for (auto* observer : observers) {
-            observer->DisplayConnectionChanged(isConnected);
-            observer->Release();
-        }
     }
 
     bool IsFrameRateChanged()
