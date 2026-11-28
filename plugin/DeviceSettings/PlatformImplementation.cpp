@@ -44,6 +44,8 @@
 #include <interfaces/IDeviceSettingsDisplay.h>     // Exchange::IDeviceSettingsDisplay (GetDisplay, GetDisplayEdidBytes)
 
 #include "UtilsLogging.h"
+#include <list>
+#include <utility>
 
 #define EDID_MAX_HORIZONTAL_SIZE 21
 #define EDID_MAX_VERTICAL_SIZE   22
@@ -136,11 +138,42 @@ private:
         DisplayInfoImplementation& _parent;
     };
 
+    class DSDisplayHDMIHotPlugNotification
+        : public Exchange::IDeviceSettingsDisplay::IDisplayHDMIHotPlugNotification
+    {
+    public:
+        explicit DSDisplayHDMIHotPlugNotification(DisplayInfoImplementation& parent)
+            : _parent(parent)
+        {
+        }
+
+        DSDisplayHDMIHotPlugNotification(const DSDisplayHDMIHotPlugNotification&)            = delete;
+        DSDisplayHDMIHotPlugNotification& operator=(const DSDisplayHDMIHotPlugNotification&) = delete;
+
+        void OnDisplayHDMIHotPlug(const Exchange::IDeviceSettingsDisplay::DisplayEvent displayEvent) override
+        {
+            if (displayEvent == Exchange::IDeviceSettingsDisplay::DisplayEvent::DS_DISPLAY_EVENT_CONNECTED) {
+                _parent.dispatchEvent(EV_DISPLAY_CONNECTED);
+            } else if (displayEvent == Exchange::IDeviceSettingsDisplay::DisplayEvent::DS_DISPLAY_EVENT_DISCONNECTED){
+                _parent.dispatchEvent(EV_DISPLAY_DISCONNECTED);
+            }
+        }
+
+        BEGIN_INTERFACE_MAP(DSDisplayHDMIHotPlugNotification)
+            INTERFACE_ENTRY(Exchange::IDeviceSettingsDisplay::IDisplayHDMIHotPlugNotification)
+        END_INTERFACE_MAP
+
+    private:
+        DisplayInfoImplementation& _parent;
+    };
+
     // Event types for worker pool dispatch
     enum Event {
         EV_RESOLUTION_PRE_CHANGE = 0,
         EV_RESOLUTION_POST_CHANGE,
         EV_DS_ACTIVATED_INIT,
+        EV_DISPLAY_CONNECTED,
+        EV_DISPLAY_DISCONNECTED
     };
 
     // Unified dispatch job for worker pool.
@@ -176,6 +209,7 @@ public:
         , _defaultPortType(VideoPortType::DS_VIDEO_PORT_TYPE_HDMI)
         , _displayHandle(INVALID_DS_HANDLE)
         , _DSVideoPortNotification(*this)
+        , _DSDisplayHDMIHotPlugNotification(*this)
     {
         DisplayInfoImplementation::_instance = this;
     }
@@ -190,6 +224,11 @@ public:
         if (vp != nullptr) {
             vp->Unregister(&_DSVideoPortNotification);
             vp->Release();
+        }
+        auto* displayHP = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
+        if (displayHP != nullptr) {
+            displayHP->Unregister(&_DSDisplayHDMIHotPlugNotification);
+            displayHP->Release();
         }
         DSHelper::Close();
         DisplayInfoImplementation::_instance = nullptr;
@@ -236,6 +275,15 @@ public:
                 LOGERR("OnDeviceSettingsActivated: IDeviceSettingsVideoPort not available");
             }
         }
+        {
+            auto* displayHP = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsDisplay>();
+            if (displayHP != nullptr) {
+                displayHP->Register("DisplayInfo", &_DSDisplayHDMIHotPlugNotification);
+                displayHP->Release();
+            } else {
+                LOGERR("OnDeviceSettingsActivated: IDeviceSettingsDisplay not available");
+            }
+        }
 
         // ---- 2. Reset cached handles ----
         _displayHandle   = INVALID_DS_HANDLE;
@@ -255,6 +303,14 @@ public:
     void OnDeviceSettingsDeactivated() override
     {
         LOGINFO("DisplayInfo: DeviceSettings deactivated — clearing cached handles");
+        {
+            // Drop queued hot-plug events; a running worker keeps ownership of
+            // _displayDispatchScheduled and resets it when it finds the queue empty.
+            Core::SafeSyncType<Core::CriticalSection> lock(_displayEventLock);
+            _displayGeneration++;
+            _displayEvents.clear();
+            _lastConnectionState = ConnectionState::UNKNOWN;
+        }
         _displayHandle   = INVALID_DS_HANDLE;
         _defaultPortType = VideoPortType::DS_VIDEO_PORT_TYPE_HDMI;
     }
@@ -311,6 +367,17 @@ public:
         std::list<IConnectionProperties::INotification*>::const_iterator index = _observers.begin();
         while(index != _observers.end()) {
             (*index)->Updated(eventtype);
+            index++;
+        }
+        _adminLock.Unlock();
+    }
+
+    void DisplayConnectionChangedImpl(const bool isConnected)
+    {
+        _adminLock.Lock();
+        std::list<IConnectionProperties::INotification*>::const_iterator index = _observers.begin();
+        while(index != _observers.end()) {
+            (*index)->DisplayConnectionChanged(isConnected);
             index++;
         }
         _adminLock.Unlock();
@@ -1132,7 +1199,49 @@ private:
     /** Submit an event to the worker pool for asynchronous processing. */
     void dispatchEvent(Event ev)
     {
+        if (ev == EV_DISPLAY_CONNECTED || ev == EV_DISPLAY_DISCONNECTED) {
+            bool dispatchScheduled;
+            {
+                Core::SafeSyncType<Core::CriticalSection> lock(_displayEventLock);
+                const ConnectionState state = (ev == EV_DISPLAY_CONNECTED) ? ConnectionState::CONNECTED : ConnectionState::DISCONNECTED;
+                if (state == _lastConnectionState) {
+                    return; // repeat of the last reported state
+                }
+                _lastConnectionState = state;
+                _displayEvents.push_back(std::make_pair(ev, _displayGeneration));
+                dispatchScheduled = _displayDispatchScheduled;
+                _displayDispatchScheduled = true;
+            }
+            if (dispatchScheduled) {
+                return;
+            }
+        }
         Core::IWorkerPool::Instance().Submit(DispatchJob::Create(this, ev));
+    }
+
+    void DispatchDisplayEvents()
+    {
+        // One worker drains this instance's HDMI events in arrival order.
+        while (true) {
+            Event ev;
+            {
+                Core::SafeSyncType<Core::CriticalSection> lock(_displayEventLock);
+                if (_displayEvents.empty()) {
+                    _displayDispatchScheduled = false;
+                    return;
+                }
+                const std::pair<Event, uint32_t> queued = _displayEvents.front();
+                _displayEvents.pop_front();
+                if (queued.second != _displayGeneration) {
+                    continue; // queued before a DeviceSettings deactivation
+                }
+                ev = queued.first;
+            }
+
+            const bool connected = (ev == EV_DISPLAY_CONNECTED);
+            LOGINFO("Dispatch - %s", connected ? "EV_DISPLAY_CONNECTED" : "EV_DISPLAY_DISCONNECTED");
+            DisplayConnectionChangedImpl(connected);
+        }
     }
 
     /**
@@ -1166,6 +1275,9 @@ private:
             LOGINFO("Dispatch - EV_DS_ACTIVATED_INIT");
             // Handle initialization on worker thread
             DispatchInit();
+        }
+        else if (ev == EV_DISPLAY_CONNECTED || ev == EV_DISPLAY_DISCONNECTED) {
+            DispatchDisplayEvents();
         }
     }
 
@@ -1217,11 +1329,18 @@ private:
 
     mutable Core::CriticalSection                    _adminLock;
     mutable Core::CriticalSection                    _frameRateLock;
+    Core::CriticalSection                            _displayEventLock;
+    std::list<std::pair<Event, uint32_t>>            _displayEvents;
+    uint32_t                                         _displayGeneration { 0 };
+    enum class ConnectionState : uint8_t { UNKNOWN, CONNECTED, DISCONNECTED };
+    ConnectionState                                  _lastConnectionState { ConnectionState::UNKNOWN };
+    bool                                            _displayDispatchScheduled { false };
     FrameRateType _cachedFrameRate { FRAMERATE_UNKNOWN };
     std::list<IConnectionProperties::INotification*> _observers;
     VideoPortType                                    _defaultPortType;
     int32_t                                          _displayHandle;      ///< display handle for default video port (EDID access)
     Core::Sink<DSVideoPortNotification>              _DSVideoPortNotification;
+    Core::Sink<DSDisplayHDMIHotPlugNotification>     _DSDisplayHDMIHotPlugNotification;
 
 public:
     static DisplayInfoImplementation* _instance;

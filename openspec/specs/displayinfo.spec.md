@@ -45,6 +45,7 @@ subsystem is ready.
 | REQ-F-10 | The plugin MUST register with the `Platform` precondition and MUST NOT activate before that precondition is satisfied. |
 | REQ-F-11 | The DeviceSettings backend `Colorimetry()` MUST return an empty `IColorimetryIterator` and `ERROR_NONE` for all failure paths (display not connected, EDID read/verify failure, `device::Exception`). It MUST NOT return `ERROR_GENERAL` to callers. |
 | REQ-F-12 | The DeviceSettings backend MUST cache the active frame rate asynchronously at construction time (best-effort, with retry), and MUST emit `Updated(FRAMERATE_CHANGE)` whenever a subsequent resolution-change callback observes a frame rate different from the cached value. |
+| REQ-F-13 | The plugin MUST fire a `DisplayConnectionChanged` notification whenever the HDMI display connection state changes due to a display being connected or disconnected. It MUST expose this notification as the generated JSON-RPC event `displayconnectionchanged`, with a required `connected` boolean describing the new state. |
 
 ### Non-Functional
 
@@ -262,6 +263,47 @@ Fired whenever the display connection or resolution changes.
 | `HDMI_CHANGE` | HDMI hot-plug state changed |
 | `HDCP_CHANGE` | HDCP handshake state changed |
 | `FRAMERATE_CHANGE` | Active frame rate changed, detected during a resolution-change callback (DeviceSettings backend only); emitted before `POST_RESOLUTION_CHANGE` |
+
+---
+
+### JSON-RPC Event – `displayconnectionchanged`
+
+**Event name:** `DisplayInfo.1.displayconnectionchanged`
+
+**Subscription name:** `displayconnectionchanged`
+
+**C++ callback:** `Exchange::IConnectionProperties::INotification::DisplayConnectionChanged(bool connected)`
+
+The generated event helper exposes the mixed-case C++ notification using the
+lowercase wire name. Preserve this generated spelling; do not rename it or
+add a manually registered alias.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connected` | boolean, required | `true` when the HDMI display connects; `false` when it disconnects |
+
+#### Scenario: HDMI display connected
+- **WHEN** a display is connected to the primary HDMI output
+- **THEN** subscribed clients MUST receive `displayconnectionchanged` with `{"connected":true}`
+
+#### Scenario: HDMI display disconnected
+- **WHEN** the display is disconnected from the primary HDMI output
+- **THEN** subscribed clients MUST receive `displayconnectionchanged` with `{"connected":false}`
+
+#### Scenario: Repeated connection state
+- **WHEN** a hardware callback reports the same state as the last reported one
+- **THEN** no event is emitted; the last-reported state is unknown until the first callback after activation, which is always reported
+
+#### Scenario: Successive connection transitions
+- **WHEN** connection and disconnection occur before queued notifications finish
+- **THEN** each payload MUST retain its associated transition state and be delivered in transition order
+
+The DeviceSettings path uses the dedicated COM-RPC display hot-plug delegate and
+a per-instance FIFO dispatcher. Existing `updated` contracts remain unchanged.
+Runtime validation, duplicate suppression, lifecycle checks, and other-backend
+conformance remain pending in the
+[connection-event change](../changes/displayinfo-display-connection-changed-event/tasks.md);
+this requirement is not a claim that those checks have passed.
 
 ---
 
@@ -815,6 +857,8 @@ Test cases:
 | `CurrentColorimetry_NoDisplayConnected` | `GetCurrentColorimetry()` — no port connected → `COLORIMETRY_UNKNOWN`, `ERROR_NONE` |
 | `CurrentColorimetry_DeviceException` | `GetCurrentColorimetry()` — `device::Exception` → `COLORIMETRY_UNKNOWN`, `ERROR_NONE` |
 | `CurrentColorimetry_AllMappings` | `GetCurrentColorimetry()` — all 8 switch-case entries verified in one parameterised loop |
+| `DisplayConnectionChanged_QueuedTransitionsInOrder` | Added regression case for FIFO connection-state delivery while notifications are queued; not run in the supplied sysroot because GTest is unavailable |
+| `DisplayConnectionChanged_DispatchesOnOwningInstance` | Added regression case for observer isolation between implementation instances; runtime validation pending |
 
 ### L2 Tests (`Tests/L2Tests/`)
 
@@ -827,6 +871,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - [ ] `displayinfo` property returns plausible values for connected and disconnected states.
 - [ ] `updated` event fires on HDMI hot-plug.
 - [ ] `updated` event fires on resolution change.
+- [ ] `displayconnectionchanged` carries `connected: true/false` for HDMI connection/disconnection, preserving queued transition order.
 - [ ] Plugin deactivates cleanly with no resource leaks (check OOP process exit).
 
 ---
@@ -846,6 +891,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - `plugin/DisplayInfo.h`:
     - `class DisplayInfo`
     - `class DisplayInfo::Notification`
+    - `DisplayInfo::Notification::DisplayConnectionChanged`
 - `plugin/DisplayInfoJsonRpc.cpp`:
     - `DisplayInfo::RegisterAll`
     - `DisplayInfo::UnregisterAll`
@@ -860,6 +906,10 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 - `plugin/DeviceSettings/PlatformImplementation.cpp`:
     - `DisplayInfoImplementation::DisplayInfoImplementation`
     - `DisplayInfoImplementation::~DisplayInfoImplementation`
+    - `DisplayInfoImplementation::DSDisplayHDMIHotPlugNotification::OnDisplayHDMIHotPlug`
+    - `DisplayInfoImplementation::dispatchEvent`
+    - `DisplayInfoImplementation::DispatchDisplayEvents`
+    - `DisplayInfoImplementation::DisplayConnectionChangedImpl`
     - `DisplayInfoImplementation::TotalGpuRam`
     - `DisplayInfoImplementation::FreeGpuRam`
     - `DisplayInfoImplementation::Register`
@@ -986,6 +1036,8 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
     - `DisplayInfoTestTest::EDID_ExceptionHandling`
     - `DisplayInfoTestTest::ResolutionChange_NotificationTest`
     - `DisplayInfoTestTest::FrameRateChange_InitialCacheAsyncAtActivation`
+    - `DisplayInfoTestTest::DisplayConnectionChanged_QueuedTransitionsInOrder`
+    - `DisplayInfoTestTest::DisplayConnectionChanged_DispatchesOnOwningInstance`
 
 ---
 
@@ -1019,6 +1071,7 @@ Integration tests validating end-to-end JSON-RPC call flow through the plugin st
 
 ## Change History
 
+- 2026-11-20 - Added REQ-F-13 and the generated `displayconnectionchanged` event contract, reusing the existing `DisplayConnectionChanged(bool connected)` callback. Documented DeviceSettings FIFO/owner dispatch and added regression cases; runtime and other-backend validation remain pending.
 - 2026-04-29 — Initial spec generated from codebase exploration (v1.0.6).
 - 2026-04-29 — Added individual JSON-RPC property subsections for all 20 auto-bound endpoints (`isaudiopassthrough`, `connected`, `totalgpuram`, `freegpuram`, `width`, `height`, `verticalfreq`, `hdcpprotection`, `edid`, `hdrsetting`, `tvcapabilities`, `stbcapabilities`, `widthincentimeters`, `heightincentimeters`, `colorspace`, `framerate`, `colourdepth`, `quantizationrange`, `colorimetry`, `eotf`); per-condition return-code tables and enum value tables added for each. Added `PortName`, `TVCapabilities`, `STBCapabilities`, `ColorSpace`, `FrameRate`, `ColourDepth`, `QuantizationRange`, `Colorimetry`, `EOTF` to Covered Code.
 - 2026-04-29 — openspec-templater — Restructured to match spec template; Covered Code expanded via full codebase scan including all 29 L1 test cases; Conformance Testing updated with per-test-case table.
